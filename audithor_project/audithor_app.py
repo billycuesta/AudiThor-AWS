@@ -446,37 +446,63 @@ def run_ecr_audit():
 
 @app.route('/api/check-healthy-status-rules', methods=['POST'])
 def check_healthy_status_rules_endpoint():
+    """
+    Endpoint to check healthy status rules against audit data.
+    This processes the audit data through all rules defined in rules.py
+    """
     audit_data = request.json
     if not audit_data:
         return jsonify({"error": "No audit data provided"}), 400
 
-    findings = []
-    for rule in RULES_TO_CHECK:
-        check_function = rule.get("check_function")
-        if callable(check_function):
-            violating_resources = check_function(audit_data)
-            if violating_resources:
-                # La estructura de `violating_resources` debe ser una lista de strings o diccionarios con 'resource' y 'region'
-                affected_resources_list = []
-                for resource in violating_resources:
-                    if isinstance(resource, dict) and 'resource' in resource and 'region' in resource:
-                        affected_resources_list.append(resource)
-                    else:
-                        affected_resources_list.append({
-                            "resource": str(resource),
-                            "region": "Global"
-                        })
-                
-                findings.append({
-                    "rule_id": rule.get("rule_id"),
-                    "section": rule.get("section"),
-                    "name": rule.get("name"),
-                    "severity": rule.get("severity"),
-                    "description": rule.get("description"),
-                    "remediation": rule.get("remediation"),
-                    "affected_resources": affected_resources_list
-                })
-    return jsonify(findings)
+    try:
+        findings = []
+        
+        # Transform the audit data to match what the rules expect
+        # The frontend sends data with structure: { iam: {metadata: {}, results: {}}, ... }
+        # But the rules expect: { iam: {users: [], roles: [], ...}, ... }
+        transformed_data = {}
+        for service_key, service_data in audit_data.items():
+            if service_data and isinstance(service_data, dict) and 'results' in service_data:
+                transformed_data[service_key] = service_data['results']
+            else:
+                transformed_data[service_key] = service_data
+        
+        # Apply each rule from RULES_TO_CHECK
+        for rule in RULES_TO_CHECK:
+            check_function = rule.get("check_function")
+            if callable(check_function):
+                try:
+                    violating_resources = check_function(transformed_data)
+                    if violating_resources:
+                        affected_resources_list = []
+                        for resource in violating_resources:
+                            if isinstance(resource, dict) and 'resource' in resource and 'region' in resource:
+                                affected_resources_list.append(resource)
+                            else:
+                                affected_resources_list.append({
+                                    "resource": str(resource),
+                                    "region": "Global"
+                                })
+                        
+                        finding = {
+                            "rule_id": rule.get("rule_id"),
+                            "section": rule.get("section"),
+                            "name": rule.get("name"),
+                            "severity": rule.get("severity"),
+                            "description": rule.get("description"),
+                            "remediation": rule.get("remediation"),
+                            "affected_resources": affected_resources_list
+                        }
+                        findings.append(finding)
+                except Exception as e:
+                    print(f"[ERROR] Rule {rule.get('rule_id', 'unknown')} failed: {e}")
+                    continue
+        
+        return jsonify(findings)
+    
+    except Exception as e:
+        print(f"[ERROR] in check_healthy_status_rules_endpoint: {e}")
+        return jsonify({"error": f"An error occurred while checking rules: {str(e)}"}), 500
 
 # ==============================================================================
 # EJECUCIÓN SERVIDOR

@@ -39,6 +39,7 @@ import { buildConfigSHView } from '/static/js/views/15_config_sh.js';
 import { buildPlaygroundView } from '/static/js/views/16_playground.js';
 import { buildHealthyStatusView, buildGeminiReportView } from '/static/js/views/17_healthy_status.js';
 
+
 // Importar las funciones que se usarán en onclick
 import { openModalWithTlsDetails } from '/static/js/views/02_exposure.js';
 import { openModalWithEcrPolicy } from '/static/js/views/04_ecr.js';
@@ -74,6 +75,7 @@ window.configSHStatusApiData = null;
 window.kmsApiData = null;
 window.allAvailableRegions = [];
 window.lastCloudtrailLookupResults = [];
+window.lastHealthyStatusFindings = [];
 
 // 3. SELECTORES
 let views, mainNavLinks, runAnalysisBtn, accessKeyInput, secretKeyInput, sessionTokenInput, loadingSpinner, buttonText, errorMessageDiv, logContainer, clearLogBtn, toggleLogBtn, logPanel;
@@ -477,13 +479,104 @@ const displayHealthyStatus = (selectedRegion) => {
 };
 
 const runAndDisplayHealthyStatus = async () => {
-    // Placeholder - necesitarías implementar esta función  
+    if (!window.iamApiData) {
+        log('No audit data available for healthy status analysis.', 'info');
+        return;
+    }
+
     log('Running healthy status analysis...', 'info');
+    
+    try {
+        // Prepare audit data structure
+        const auditData = {
+            iam: window.iamApiData,
+            federation: window.federationApiData,
+            accessAnalyzer: window.accessAnalyzerApiData,
+            securityhub: window.securityHubApiData,
+            exposure: window.exposureApiData,
+            guardduty: window.guarddutyApiData,
+            waf: window.wafApiData,
+            cloudtrail: window.cloudtrailApiData,
+            cloudwatch: window.cloudwatchApiData,
+            inspector: window.inspectorApiData,
+            acm: window.acmApiData,
+            compute: window.computeApiData,
+            ecr: window.ecrApiData,
+            databases: window.databasesApiData,
+            networkPolicies: window.networkPoliciesApiData,
+            configSH: window.configSHApiData,
+            configSHStatus: window.configSHStatusApiData,
+            kms: window.kmsApiData,
+            connectivity: window.connectivityApiData
+        };
+
+        // Call the backend API to check rules
+        const response = await fetch('http://127.0.0.1:5001/api/check-healthy-status-rules', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(auditData)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const findings = await response.json();
+        
+        // Store findings globally
+        window.lastHealthyStatusFindings = findings;
+        
+        log(`Healthy status analysis completed. Found ${findings.length} findings.`, 'success');
+        
+        // Import the functions dynamically to avoid circular imports
+        const { renderHealthyStatusFindings, populateHealthyStatusFilter } = await import('/static/js/views/17_healthy_status.js');
+        
+        // Render the findings
+        renderHealthyStatusFindings(findings);
+        populateHealthyStatusFilter(findings);
+        
+        // Also populate the Gemini region filter
+        populateGeminiRegionFilter(findings);
+        
+    } catch (error) {
+        log(`Error in healthy status analysis: ${error.message}`, 'error');
+        console.error('Healthy status error:', error);
+    }
 };
 
 const populateHealthyStatusFilter = () => {
     // Placeholder - necesitarías implementar esta función
     log('Populating healthy status filters...', 'info');
+};
+
+const populateGeminiRegionFilter = (findings) => {
+    const select = document.getElementById('gemini-region-filter');
+    if (!select) return;
+
+    const regions = new Set();
+    regions.add('all');
+    findings.forEach(finding => {
+        finding.affected_resources.forEach(res => {
+            if (res.region) {
+                regions.add(res.region);
+            }
+        });
+    });
+
+    // Clear existing options except "All Regions"
+    select.innerHTML = '<option value="all">All Regions</option>';
+    
+    const sortedRegions = Array.from(regions).sort();
+    sortedRegions.forEach(region => {
+        if (region !== 'all') {
+            const option = document.createElement('option');
+            option.value = region;
+            option.textContent = region;
+            select.appendChild(option);
+        }
+    });
 };
 
 // 5. PUNTO DE ENTRADA

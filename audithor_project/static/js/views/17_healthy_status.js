@@ -6,6 +6,10 @@
 // --- IMPORTS ---
 import { handleTabClick, log } from '../utils.js';
 
+// Initialize global variable
+if (!window.lastHealthyStatusFindings) {
+    window.lastHealthyStatusFindings = [];
+}
 
 // --- MAIN VIEW FUNCTION (EXPORTED) ---
 export const buildHealthyStatusView = () => {
@@ -31,7 +35,9 @@ export const buildHealthyStatusView = () => {
             <div id="hs-findings-content" class="healthy-status-tab-content">
                 <div class="mb-4">
                     <label for="healthy-status-region-filter" class="block text-sm font-medium text-gray-700">Filter by Region:</label>
-                    <select id="healthy-status-region-filter" class="mt-1 block w-full md:w-96 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-[#eb3496] focus:border-[#eb3496] sm:text-sm rounded-md"></select>
+                    <select id="healthy-status-region-filter" class="mt-1 block w-full md:w-96 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-[#eb3496] focus:border-[#eb3496] sm:text-sm rounded-md">
+                        <option value="all">All Regions</option>
+                    </select>
                 </div>
                 <div id="healthy-status-container">
                     <div class="text-center py-16 bg-white rounded-lg">
@@ -46,7 +52,12 @@ export const buildHealthyStatusView = () => {
     `;
 
     const tabsNav = container.querySelector('#healthy-status-tabs');
-    if (tabsNav) tabsNav.addEventListener('click', handleTabClick(tabsNav, '.healthy-status-tab-content'));
+    if (tabsNav) {
+        tabsNav.addEventListener('click', handleTabClick(tabsNav, '.healthy-status-tab-content'));
+    }
+    
+    // Build the report view immediately after creating the container
+    buildGeminiReportView();
 };
 
 // This function is also exported because it's called from the main app.js
@@ -120,13 +131,10 @@ A continuación te proporciono los hallazgos en formato JSON:`;
     }
 };
 
-
-
-// --- INTERNAL MODULE FUNCTIONS (NOT EXPORTED) ---
-
+// --- INTERNAL MODULE FUNCTIONS ---
 export const generateGeminiReport = async () => {
-    const apiKey = document.getElementById('gemini-api-key').value.trim();
-    const userPrompt = document.getElementById('gemini-prompt').value.trim();
+    const apiKey = document.getElementById('gemini-api-key')?.value.trim();
+    const userPrompt = document.getElementById('gemini-prompt')?.value.trim();
     const reportOutputContainer = document.getElementById('gemini-report-output');
     const reportContentDiv = document.getElementById('gemini-report-content');
     const runBtn = document.getElementById('generate-gemini-report-btn');
@@ -137,25 +145,28 @@ export const generateGeminiReport = async () => {
         alert('Please enter your Gemini API Key.');
         return;
     }
-    if (window.lastHealthyStatusFindings.length === 0) {
+    
+    if (!window.lastHealthyStatusFindings || window.lastHealthyStatusFindings.length === 0) {
         alert('There are no findings to generate a report. Please run an analysis first.');
         return;
     }
 
-    runBtn.disabled = true;
-    spinner.classList.remove('hidden');
-    btnText.textContent = 'Generating...';
-    reportOutputContainer.classList.add('hidden');
-    reportContentDiv.textContent = 'Contacting the Gemini API...';
+    if (runBtn) runBtn.disabled = true;
+    if (spinner) spinner.classList.remove('hidden');
+    if (btnText) btnText.textContent = 'Generating...';
+    if (reportOutputContainer) reportOutputContainer.classList.add('hidden');
+    if (reportContentDiv) reportContentDiv.textContent = 'Contacting the Gemini API...';
     log('Generating report with Gemini...', 'info');
 
-    const selectedRegion = document.getElementById('gemini-region-filter').value;
+    const selectedRegion = document.getElementById('gemini-region-filter')?.value || 'all';
     let findingsForReport = window.lastHealthyStatusFindings;
 
     if (selectedRegion !== 'all') {
         log(`Filtering findings for region: ${selectedRegion}`, 'info');
         findingsForReport = window.lastHealthyStatusFindings.map(finding => {
-            const affectedInRegion = finding.affected_resources.filter(res => res.region === selectedRegion || res.region === 'Global');
+            const affectedInRegion = finding.affected_resources.filter(res => 
+                res.region === selectedRegion || res.region === 'Global'
+            );
             if (affectedInRegion.length > 0) {
                 return { ...finding, affected_resources: affectedInRegion };
             }
@@ -178,58 +189,74 @@ export const generateGeminiReport = async () => {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(`Gemini API Error: ${errorData.error.message}`);
+            throw new Error(`Gemini API Error: ${errorData.error?.message || 'Unknown API error'}`);
         }
 
         const data = await response.json();
-        const reportText = data.candidates[0].content.parts[0].text;
+        const reportText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated';
         
-        reportContentDiv.textContent = reportText;
-        reportOutputContainer.classList.remove('hidden');
+        if (reportContentDiv) reportContentDiv.textContent = reportText;
+        if (reportOutputContainer) reportOutputContainer.classList.remove('hidden');
         log('Report generated by Gemini successfully.', 'success');
 
     } catch (error) {
-        reportContentDiv.textContent = `Error generating report:\n${error.message}`;
-        reportOutputContainer.classList.remove('hidden');
+        const errorMsg = `Error generating report:\n${error.message}`;
+        if (reportContentDiv) reportContentDiv.textContent = errorMsg;
+        if (reportOutputContainer) reportOutputContainer.classList.remove('hidden');
         log(`Error in Gemini API call: ${error.message}`, 'error');
     } finally {
-        runBtn.disabled = false;
-        spinner.classList.add('hidden');
-        btnText.textContent = 'Generate Draft Email';
+        if (runBtn) runBtn.disabled = false;
+        if (spinner) spinner.classList.add('hidden');
+        if (btnText) btnText.textContent = 'Generate Draft Email';
     }
 };
 
+// Sample rule checking function - you'll need to implement the actual rules
 export const check_healthy_status_rules = (auditData) => {
     const findings = [];
     
-    // Example: Check for MFA rule
-    const users = auditData.iam?.results?.users || [];
-    const noMfaUsers = users.filter(user => user.MFADevices.length === 0).map(user => user.UserName);
-    if (noMfaUsers.length > 0) {
-        findings.push({
-            rule_id: "IAM_001",
-            section: "Identity & Access",
-            name: "User without MFA enabled",
-            severity: "HIGH",
-            description: "An IAM user does not have Multi-Factor Authentication (MFA) enabled.",
-            remediation: "Enable MFA for the affected user(s).",
-            affected_resources: noMfaUsers.map(name => ({ resource: name, region: 'Global' }))
-        });
-    }
+    try {
+        // Example: Check for MFA rule
+        const users = auditData.iam?.results?.users || [];
+        const noMfaUsers = users.filter(user => 
+            !user.MFADevices || user.MFADevices.length === 0
+        ).map(user => user.UserName || 'Unknown user');
+        
+        if (noMfaUsers.length > 0) {
+            findings.push({
+                rule_id: "IAM_001",
+                section: "Identity & Access",
+                name: "User without MFA enabled",
+                severity: "HIGH",
+                description: "IAM users without Multi-Factor Authentication (MFA) enabled pose a significant security risk.",
+                remediation: "Enable MFA for all IAM users, especially those with console access.",
+                affected_resources: noMfaUsers.map(name => ({ resource: name, region: 'Global' }))
+            });
+        }
 
-    // Example: Check for GuardDuty rule
-    const guarddutyStatus = auditData.guardduty?.results?.status || [];
-    const disabledGuardDuty = guarddutyStatus.filter(status => status.Status !== "Enabled").map(status => status.Region);
-    if (disabledGuardDuty.length > 0) {
-        findings.push({
-            rule_id: "GUARDDUTY_001",
-            section: "Security Services",
-            name: "GuardDuty not enabled in some regions",
-            severity: "LOW",
-            description: "AWS GuardDuty is not enabled in one or more regions.",
-            remediation: "Enable GuardDuty in the affected region(s).",
-            affected_resources: disabledGuardDuty.map(region => ({ resource: 'GuardDuty', region }))
-        });
+        // Example: Check for GuardDuty rule
+        const guarddutyStatus = auditData.guardduty?.results?.status || [];
+        const disabledGuardDuty = guarddutyStatus.filter(status => 
+            status.Status !== "Enabled"
+        ).map(status => status.Region);
+        
+        if (disabledGuardDuty.length > 0) {
+            findings.push({
+                rule_id: "GUARDDUTY_001",
+                section: "Security Services",
+                name: "GuardDuty not enabled in some regions",
+                severity: "MEDIUM",
+                description: "AWS GuardDuty provides threat detection but is not enabled in all regions.",
+                remediation: "Enable GuardDuty in all active AWS regions for comprehensive threat detection.",
+                affected_resources: disabledGuardDuty.map(region => ({ resource: 'GuardDuty Service', region }))
+            });
+        }
+
+        // Add more rules here as needed...
+
+    } catch (error) {
+        console.error('Error in rule checking:', error);
+        log(`Error checking rules: ${error.message}`, 'error');
     }
 
     return findings;
@@ -239,60 +266,82 @@ export const renderHealthyStatusFindings = (findings) => {
     const container = document.getElementById('healthy-status-container');
     if (!container) return;
 
-    if (findings.length === 0) {
+    if (!findings || findings.length === 0) {
         container.innerHTML = `
-            <div class="bg-white p-6 rounded-xl border border-gray-100">
-                <p class="text-center text-gray-500">Good job! No findings were detected in this analysis.</p>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div class="flex items-center justify-center text-green-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-patch-check-fill mr-3" viewBox="0 0 16 16"><path d="M10.067.87a2.89 2.89 0 0 0-4.134 0l-.622.638-.89-.011a2.89 2.89 0 0 0-2.924 2.924l.01.89-.636.622a2.89 2.89 0 0 0 0 4.134l.637.622-.011.89a2.89 2.89 0 0 0 2.924 2.924l.89-.01.622.636a2.89 2.89 0 0 0 4.134 0l.622-.637.89.01a2.89 2.89 0 0 0 2.924-2.924l-.01-.89.636-.622a2.89 2.89 0 0 0 0-4.134l-.637-.622.011-.89a2.89 2.89 0 0 0-2.924-2.924l-.89.01zm.287 5.984-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7 8.793l2.646-2.647a.5.5 0 0 1 .708.708"/></svg>
+                    <p class="text-center font-semibold text-lg">¡Congratulations! No findings were found for the selected region.</p>
+                </div>
             </div>
         `;
         return;
     }
 
-    const groupedFindings = findings.reduce((acc, finding) => {
-        const key = finding.section;
-        if (!acc[key]) {
-            acc[key] = [];
-        }
-        acc[key].push(finding);
-        return acc;
-    }, {});
+    // Sort findings by severity
+    const severityOrder = { 'Crítico': 1, 'Alto': 2, 'Medio': 3, 'Bajo': 4 };
+    const sortedFindings = [...findings].sort((a, b) => (severityOrder[a.severity] || 99) - (severityOrder[b.severity] || 99));
 
-    let html = '';
-    for (const section in groupedFindings) {
-        html += `
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
-                <h3 class="font-bold text-lg mb-4 text-[#204071]">${section} Findings</h3>
-                <div class="space-y-4">
-        `;
+    container.innerHTML = '';
+    
+    sortedFindings.forEach(finding => {
+        let borderColor = 'border-gray-500';
+        if (finding.severity === 'Crítico') borderColor = 'border-red-600';
+        if (finding.severity === 'Alto') borderColor = 'border-red-500';
+        if (finding.severity === 'Medio') borderColor = 'border-yellow-500';
+        if (finding.severity === 'Bajo') borderColor = 'border-blue-500';
 
-        groupedFindings[section].forEach(finding => {
-            const severityClass = finding.severity === 'CRITICAL' ? 'bg-red-100 text-red-800' :
-                                  finding.severity === 'HIGH' ? 'bg-orange-100 text-orange-800' :
-                                  finding.severity === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-gray-100 text-gray-800';
-            const resourcesHtml = finding.affected_resources.map(res => `
-                <div class="bg-gray-50 p-2 rounded-md text-sm font-mono break-all">
-                    Resource: ${res.resource} <span class="text-gray-500">(${res.region})</span>
-                </div>
-            `).join('');
-
-            html += `
-                <div class="border-b border-gray-100 pb-4">
-                    <div class="flex items-center mb-2">
-                        <span class="text-sm font-bold text-gray-700 mr-2">${finding.name}</span>
-                        <span class="text-xs font-medium px-2 py-0.5 rounded-full ${severityClass}">${finding.severity}</span>
-                    </div>
-                    <p class="text-sm text-gray-600 mb-2">${finding.description}</p>
-                    <p class="text-xs text-gray-500 font-semibold mb-1">Affected Resources:</p>
-                    <div class="space-y-1">${resourcesHtml}</div>
-                </div>
-            `;
+        // Create display format for affected resources
+        const affectedResourcesWithDisplay = (finding.affected_resources || []).map(res => {
+            if (typeof res === 'object' && res.resource && res.region) {
+                return {
+                    ...res,
+                    display: `${res.resource} (${res.region})`
+                };
+            } else if (typeof res === 'string') {
+                return {
+                    resource: res,
+                    region: 'Global',
+                    display: `${res} (Global)`
+                };
+            } else {
+                return {
+                    resource: 'Unknown',
+                    region: 'Global',
+                    display: 'Unknown (Global)'
+                };
+            }
         });
 
-        html += '</div></div>';
-    }
+        const affectedResourcesHtml = affectedResourcesWithDisplay.map(res => 
+            `<li>${res.display}</li>`
+        ).join('');
+        
+        const resourcesCount = affectedResourcesWithDisplay.length;
 
-    container.innerHTML = html;
+        const card = `
+            <div class="bg-white p-4 rounded-xl mb-4 border-l-4 ${borderColor} shadow-sm">
+                <h3 class="text-xl font-bold text-[#204071]">${finding.name || 'Unknown finding'} <span class="text-sm font-normal text-gray-500">(${finding.severity || 'UNKNOWN'})</span></h3>
+                <p class="text-gray-600 mt-2 text-sm">${finding.description || 'No description available'}</p>
+                <div class="mt-4">
+                    <details class="group">
+                        <summary class="font-semibold text-gray-800 text-sm cursor-pointer list-none flex items-center">
+                            <svg class="w-4 h-4 mr-2 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            Affected Resources (${resourcesCount}):
+                        </summary>
+                        <ul class="list-disc list-inside text-sm text-gray-700 bg-gray-50 p-2 rounded-md mt-2 font-mono ml-6">
+                            ${affectedResourcesHtml}
+                        </ul>
+                    </details>
+                </div>
+                <div class="mt-4">
+                    <h4 class="font-semibold text-gray-800 text-sm">Recommended Solution:</h4>
+                    <p class="text-gray-600 text-sm">${finding.remediation || 'No remediation information available'}</p>
+                </div>
+            </div>
+        `;
+        container.innerHTML += card;
+    });
 };
 
 export const populateHealthyStatusFilter = (findings) => {
@@ -301,8 +350,9 @@ export const populateHealthyStatusFilter = (findings) => {
 
     const regions = new Set();
     regions.add('all');
-    findings.forEach(finding => {
-        finding.affected_resources.forEach(res => {
+    
+    (findings || []).forEach(finding => {
+        (finding.affected_resources || []).forEach(res => {
             if (res.region) {
                 regions.add(res.region);
             }
@@ -318,12 +368,20 @@ export const populateHealthyStatusFilter = (findings) => {
         select.appendChild(option);
     });
 
-    select.addEventListener('change', (e) => {
+    // Remove existing event listeners
+    const newSelect = select.cloneNode(true);
+    select.parentNode.replaceChild(newSelect, select);
+    
+    // Add new event listener
+    newSelect.addEventListener('change', (e) => {
         const selectedRegion = e.target.value;
-        let filteredFindings = window.lastHealthyStatusFindings;
+        let filteredFindings = window.lastHealthyStatusFindings || [];
+        
         if (selectedRegion !== 'all') {
-            filteredFindings = window.lastHealthyStatusFindings.filter(finding =>
-                finding.affected_resources.some(res => res.region === selectedRegion || res.region === 'Global')
+            filteredFindings = (window.lastHealthyStatusFindings || []).filter(finding =>
+                (finding.affected_resources || []).some(res => 
+                    res.region === selectedRegion || res.region === 'Global'
+                )
             );
         }
         renderHealthyStatusFindings(filteredFindings);
