@@ -444,6 +444,39 @@ def run_ecr_audit():
     except Exception as e:
         return jsonify({"error": f"Unexpected error while collecting ECR data: {str(e)}"}), 500
 
+@app.route('/api/check-healthy-status-rules', methods=['POST'])
+def check_healthy_status_rules_endpoint():
+    audit_data = request.json
+    if not audit_data:
+        return jsonify({"error": "No audit data provided"}), 400
+
+    findings = []
+    for rule in RULES_TO_CHECK:
+        check_function = rule.get("check_function")
+        if callable(check_function):
+            violating_resources = check_function(audit_data)
+            if violating_resources:
+                # La estructura de `violating_resources` debe ser una lista de strings o diccionarios con 'resource' y 'region'
+                affected_resources_list = []
+                for resource in violating_resources:
+                    if isinstance(resource, dict) and 'resource' in resource and 'region' in resource:
+                        affected_resources_list.append(resource)
+                    else:
+                        affected_resources_list.append({
+                            "resource": str(resource),
+                            "region": "Global"
+                        })
+                
+                findings.append({
+                    "rule_id": rule.get("rule_id"),
+                    "section": rule.get("section"),
+                    "name": rule.get("name"),
+                    "severity": rule.get("severity"),
+                    "description": rule.get("description"),
+                    "remediation": rule.get("remediation"),
+                    "affected_resources": affected_resources_list
+                })
+    return jsonify(findings)
 
 # ==============================================================================
 # EJECUCIÓN SERVIDOR
