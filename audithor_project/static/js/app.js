@@ -633,8 +633,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (toggleLogBtn && logPanel) {
         toggleLogBtn.addEventListener('click', () => {
-            logPanel.classList.toggle('hidden');
-            toggleLogBtn.textContent = logPanel.classList.contains('hidden') ? 'Show Log' : 'Minimize';
+            const isMinimized = logPanel.classList.contains('minimized');
+            
+            if (isMinimized) {
+                // Show the full panel
+                logPanel.classList.remove('minimized');
+                toggleLogBtn.textContent = 'Minimize';
+            } else {
+                // Minimize the panel (slide down, keeping only 48px visible)
+                logPanel.classList.add('minimized');
+                toggleLogBtn.textContent = 'Show Log';
+            }
         });
     }
 
