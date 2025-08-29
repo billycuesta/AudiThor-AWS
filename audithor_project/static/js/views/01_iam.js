@@ -65,6 +65,9 @@ export const buildIamView = () => {
     if (window.accessAnalyzerApiData) {
         renderAccessAnalyzerContent();
     }
+    if (window.federationApiData) {
+        renderFederationView();
+    }
 };
 
 
