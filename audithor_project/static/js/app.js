@@ -506,6 +506,7 @@ const runAndDisplayHealthyStatus = async () => {
             networkPolicies: window.networkPoliciesApiData,
             configSH: window.configSHApiData,
             configSHStatus: window.configSHStatusApiData,
+            config_sh: window.configSHStatusApiData,
             kms: window.kmsApiData,
             connectivity: window.connectivityApiData
         };

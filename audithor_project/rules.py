@@ -145,29 +145,55 @@ def check_cis_1_2_0_standard_enabled(audit_data):
     """
     Verifica si el estándar de Security Hub 'CIS AWS Foundations Benchmark v1.2.0' está habilitado.
     """
+    failing_resources = []
     service_status = audit_data.get("config_sh", {}).get("service_status", [])
-
+    
+    regions_with_standard = set()
     for region_status in service_status:
         for standard_arn in region_status.get("EnabledStandards", []):
             arn_lower = standard_arn.lower()
-            if "cis-aws-foundations-benchmark" in arn_lower and "1.2.0" in arn_lower:
-                return [] 
+            # Modificación de la lógica para ser más flexible con la versión.
+            # Se aceptarán tanto la v1.2.0 como la v3.0.0.
+            if "cis-aws-foundations-benchmark" in arn_lower:
+                regions_with_standard.add(region_status.get("Region"))
     
-    return ["CIS AWS Foundations Benchmark v1.2.0 Standard"]
+    all_regions = [s.get("Region") for s in service_status]
+
+    for region in all_regions:
+        if region not in regions_with_standard:
+            failing_resources.append({"resource": "CIS AWS Foundations Benchmark v1.2.0 Standard", "region": region})
+    
+    if not service_status:
+        return [{"resource": "CIS AWS Foundations Benchmark v1.2.0 Standard", "region": "Global"}]
+        
+    return failing_resources
+
 
 def check_aws_foundational_security_standard_enabled(audit_data):
     """
     Verifica si el estándar 'AWS Foundational Security Best Practices v1.0.0' está habilitado.
     """
+    failing_resources = []
     service_status = audit_data.get("config_sh", {}).get("service_status", [])
-
+    
+    regions_with_standard = set()
     for region_status in service_status:
         for standard_arn in region_status.get("EnabledStandards", []):
             arn_lower = standard_arn.lower()
             if "aws-foundational-security-best-practices" in arn_lower:
-                return [] 
+                regions_with_standard.add(region_status.get("Region"))
     
-    return ["AWS Foundational Security Best Practices Standard"]
+    all_regions = [s.get("Region") for s in service_status]
+
+    for region in all_regions:
+        if region not in regions_with_standard:
+            failing_resources.append({"resource": "AWS Foundational Security Best Practices Standard", "region": region})
+
+    if not service_status:
+        return [{"resource": "AWS Foundational Security Best Practices Standard", "region": "Global"}]
+        
+    return failing_resources
+
 
 def check_inspector_platform_eol(audit_data):
     """
