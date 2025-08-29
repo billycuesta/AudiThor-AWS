@@ -11,10 +11,8 @@ import { handleTabClick, renderSecurityHubFindings, log } from '../utils.js';
 // --- FUNCIÓN PRINCIPAL DE LA VISTA (EXPORTADA) ---
 // La función principal que construye toda la vista. La exportamos para que app.js pueda usarla.
 
-export const buildIamView = () => {
-    // --- PUNTO DE CONTROL ---
-    console.log('2️⃣ Ejecutando buildIamView...');
 
+export const buildIamView = () => {
     const container = document.getElementById('iam-view');
     if (!container) return;
 
@@ -57,23 +55,17 @@ export const buildIamView = () => {
     const getDetailsBtn = document.getElementById('iam-get-details-btn');
     if (getDetailsBtn) getDetailsBtn.addEventListener('click', getIamPermissionDetails);
 
-    // Actualizar con datos si están disponibles
-    if (window.iamApiData) {
-        updateIamDashboard();
-    }
+    if (window.iamApiData) updateIamDashboard();
     
-    // OJO: He quitado la llamada a updateSecurityHubDashboard de aquí para evitar que se ejecute dos veces.
-    // La controlaremos desde el setTimeout de app.js
+    // CAMBIO AQUÍ: Llamar updateSecurityHubDashboard si hay CUALQUIER dato de Security Hub
+    if (window.securityHubApiData || window.securityHubStatusApiData) {
+        updateSecurityHubDashboard();
+    }
     
     if (window.accessAnalyzerApiData) {
         renderAccessAnalyzerContent();
     }
-
-    if (window.federationApiData) {
-        renderFederationView();
-    }
 };
-
 
 
 // --- FUNCIONES INTERNAS DEL MÓDULO (NO SE EXPORTAN) ---
@@ -523,25 +515,19 @@ export const openModalWithUserGroups = (userIndex) => {
 };
 
 export const updateSecurityHubDashboard = () => {
-    // --- PUNTO DE CONTROL ---
-    console.log('4️⃣ Ejecutando updateSecurityHubDashboard...');
-    
+    const securityHubData = window.securityHubApiData || window.securityHubStatusApiData;
     const containerElement = document.getElementById('sh-iam-findings-container');
     
-    // --- PUNTO DE CONTROL ---
-    console.log('❓ ¿Existe el contenedor #sh-iam-findings-container?', containerElement);
-
-    if (!window.securityHubApiData || !window.securityHubApiData.results) {
-        console.error('⛔️ No hay datos de Security Hub en window para renderizar.');
+    if (!securityHubData || !securityHubData.results || !securityHubData.results.findings) {
+        // Si no hay findings, mostrar mensaje vacío
+        const container = document.getElementById('sh-iam-findings-container');
+        if (container) {
+            container.innerHTML = '<p class="text-center text-gray-500 py-4">No Security Hub data available. Run an analysis first.</p>';
+        }
         return;
     }
 
-    log('Rendering Security Hub data (IAM)…', 'info');
-    const allIamFindings = window.securityHubApiData.results.findings.iamFindings;
-
-    // --- PUNTO DE CONTROL ---
-    console.log('📊 Datos a renderizar:', allIamFindings);
-
+    const allIamFindings = securityHubData.results.findings.iamFindings || [];
     const filterControlsContainer = document.getElementById('iam-sh-filter-controls');
 
     const renderFilteredFindings = (severity) => {
@@ -573,8 +559,6 @@ export const updateSecurityHubDashboard = () => {
 
     renderFilteredFindings('ALL');
 };
-
-
 
 
 const renderUsersTable = (users) => {
