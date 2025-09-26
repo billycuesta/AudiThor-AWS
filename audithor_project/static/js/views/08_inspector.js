@@ -181,8 +181,6 @@ const updateInspectorSummaryCards = (scanStatus, findings) => {
     document.getElementById('inspector-high-findings').textContent = findings.filter(f => f.severity === 'HIGH').length;
 };
 
-const createInspectorSecurityHubHtml = () => `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><h3 class="font-bold text-lg mb-4 text-[#204071]">Active Security Findings (Inspector via SH)</h3><div id="sh-inspector-findings-container" class="overflow-x-auto"></div></div>`;
-
 const renderInspectorStatusTable = (statusList) => {
     if (!statusList || statusList.length === 0) return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">Inspector is not enabled in any region.</p></div>';
     let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
@@ -203,84 +201,6 @@ const renderInspectorStatusTable = (statusList) => {
     });
     table += '</tbody></table></div>';
     return table;
-};
-
-const renderInspectorFindingsPage = (tbodyContainer, findings, page, rowsPerPage) => {
-    tbodyContainer.innerHTML = '';
-    const start = (page - 1) * rowsPerPage;
-    const end = start + rowsPerPage;
-    const paginatedItems = findings.slice(start, end);
-
-    const severityClasses = { 'CRITICAL': 'bg-red-600 text-white', 'HIGH': 'bg-orange-500 text-white', 'MEDIUM': 'bg-yellow-400 text-black', 'LOW': 'bg-blue-500 text-white', 'INFORMATIONAL': 'bg-gray-400 text-white', 'UNDEFINED': 'bg-gray-400 text-white' };
-    let pageHtml = '';
-
-    for (const f of paginatedItems) {
-        const severity = f.severity || 'UNDEFINED';
-        const severityClass = severityClasses[severity] || 'bg-gray-200 text-gray-800';
-        const firstSeen = new Date(f.firstObservedAt).toLocaleDateString();
-
-        const resource = f.resources && f.resources.length > 0 ? f.resources[0] : {};
-        const resourceId = resource.id || 'N/A';
-        const resourceTypeRaw = resource.type || 'Unknown';
-        const resourceName = resource.tags?.Name || '';
-
-        const typeMap = {
-            'AWS_EC2_INSTANCE': 'EC2 Instance',
-            'AWS_ECR_REPOSITORY': 'ECR Repository',
-            'AWS_LAMBDA_FUNCTION': 'Lambda Function'
-        };
-        const resourceTypeDisplay = typeMap[resourceTypeRaw] || resourceTypeRaw;
-
-        let resourceDisplay = `<div class="font-semibold text-gray-800">${resourceTypeDisplay}</div>`;
-        if (resourceName) {
-            resourceDisplay += `<div class="text-gray-700">${resourceName}</div>`;
-        }
-        resourceDisplay += `<div class="font-mono text-gray-500 text-xs">${resourceId}</div>`;
-
-        pageHtml += `<tr class="hover:bg-gray-50">
-                    <td class="px-4 py-4 align-top whitespace-nowrap"><span class="px-2.5 py-0.5 text-xs font-semibold rounded-full ${severityClass}">${severity}</span></td>
-                    <td class="px-4 py-4 align-top whitespace-nowrap text-xs text-gray-600">${firstSeen}</td>
-                    <td class="px-4 py-4 align-top whitespace-nowrap text-xs text-gray-600">${f.Region}</td>
-                    <td class="px-4 py-4 align-top text-xs text-gray-800 break-words">${f.title}</td>
-                    <td class="px-4 py-4 align-top whitespace-nowrap text-xs text-gray-600">${f.type}</td>
-                    <td class="px-4 py-4 align-top text-xs text-gray-600 break-words">${resourceDisplay}</td>
-                </tr>`;
-    }
-    tbodyContainer.innerHTML = pageHtml;
-};
-
-const setupInspectorFindingsFilter = () => {
-    const allFindings = window.inspectorApiData.results.findings;
-    const filterControlsContainer = document.getElementById('inspector-filter-controls');
-    const tbodyContainer = document.getElementById('inspector-findings-tbody');
-    const paginationContainer = document.getElementById('inspector-pagination-controls');
-
-    if (!filterControlsContainer || !tbodyContainer || !paginationContainer) return;
-
-    const renderFilteredInspectorFindings = (severity) => {
-        let filteredFindings = allFindings;
-        if (severity !== 'ALL') {
-            filteredFindings = allFindings.filter(f => f.severity === severity);
-        }
-        setupPagination(paginationContainer, tbodyContainer, filteredFindings, renderInspectorFindingsPage);
-    };
-
-    filterControlsContainer.addEventListener('click', (e) => {
-        const filterBtn = e.target.closest('.inspector-filter-btn');
-        if (!filterBtn) return;
-
-        filterControlsContainer.querySelectorAll('.inspector-filter-btn').forEach(btn => {
-            btn.classList.remove('bg-[#eb3496]', 'text-white');
-            btn.classList.add('bg-white', 'text-gray-700', 'border', 'border-gray-300', 'hover:bg-gray-50');
-        });
-        filterBtn.classList.add('bg-[#eb3496]', 'text-white');
-        filterBtn.classList.remove('bg-white', 'text-gray-700', 'border', 'border-gray-300', 'hover:bg-gray-50');
-
-        const selectedSeverity = filterBtn.dataset.severity;
-        renderFilteredInspectorFindings(selectedSeverity);
-    });
-
-    renderFilteredInspectorFindings('ALL');
 };
 
 const renderFullInspectorView = (findings, inspectorFindingsSH) => {

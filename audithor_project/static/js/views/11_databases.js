@@ -165,16 +165,6 @@ const updateDatabasesSummaryCards = (rds, aurora, dynamodb, docdb) => {
     document.getElementById('db-total-docdb').textContent = docdb.length;
 };
 
-const formatBytes = (bytes, decimals = 2) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-}
- 
-
 const renderRdsTable = (instances) => {
     if (!instances || instances.length === 0) return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No standalone RDS instances were found.</p></div>';
     
@@ -182,6 +172,7 @@ const renderRdsTable = (instances) => {
                 '<th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>' +
                 '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
                 '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>' +
+                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Motor</th>' +
                 '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>' +
                 '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Public Access</th>' + 
                 '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Encrypted</th>' +
@@ -213,6 +204,7 @@ const renderRdsTable = (instances) => {
                     <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${i.Region}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${i.DBInstanceIdentifier}</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${i.Engine}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(i.DBInstanceStatus)}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm">${publicBadge}</td> 
                     <td class="px-4 py-4 whitespace-nowrap text-sm">${createEncryptionBadge(i.Encrypted)}</td>

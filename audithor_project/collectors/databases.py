@@ -69,26 +69,25 @@ def collect_database_data(session):
             aurora_paginator = rds_client.get_paginator("describe_db_clusters")
             for page in aurora_paginator.paginate():
                 for cluster in page.get("DBClusters", []):
-                    if "aurora" in cluster.get("Engine", ""):
-                        kms_key_id = cluster.get("KmsKeyId")
-                        key_id_for_lookup = kms_key_id.split('/')[-1] if kms_key_id else None
-                        sg_ids = [sg['VpcSecurityGroupId'] for sg in cluster.get('VpcSecurityGroups', [])]
-                        subnet_ids, vpc_id = get_subnet_and_vpc_info(cluster.get("DBSubnetGroup"))
-                        
-                        aurora_clusters.append({
-                            "Region": region,
-                            "ClusterIdentifier": cluster.get("DBClusterIdentifier"),
-                            "Engine": cluster.get("Engine"),
-                            "Status": cluster.get("Status"),
-                            "Endpoint": cluster.get("Endpoint", "N/A"),
-                            "Encrypted": cluster.get("StorageEncrypted", False),
-                            "KmsKeyId": kms_key_id,
-                            "KmsKeyAlias": alias_map.get(key_id_for_lookup, kms_key_id or "N/A"),
-                            "ARN": cluster.get("DBClusterArn"),
-                            "SubnetIds": subnet_ids,
-                            "VpcId": vpc_id,
-                            "SecurityGroupIds": sg_ids
-                        })
+                    kms_key_id = cluster.get("KmsKeyId")
+                    key_id_for_lookup = kms_key_id.split('/')[-1] if kms_key_id else None
+                    sg_ids = [sg['VpcSecurityGroupId'] for sg in cluster.get('VpcSecurityGroups', [])]
+                    subnet_ids, vpc_id = get_subnet_and_vpc_info(cluster.get("DBSubnetGroup"))
+                    
+                    aurora_clusters.append({
+                        "Region": region,
+                        "ClusterIdentifier": cluster.get("DBClusterIdentifier"),
+                        "Engine": cluster.get("Engine"),
+                        "Status": cluster.get("Status"),
+                        "Endpoint": cluster.get("Endpoint", "N/A"),
+                        "Encrypted": cluster.get("StorageEncrypted", False),
+                        "KmsKeyId": kms_key_id,
+                        "KmsKeyAlias": alias_map.get(key_id_for_lookup, kms_key_id or "N/A"),
+                        "ARN": cluster.get("DBClusterArn"),
+                        "SubnetIds": subnet_ids,
+                        "VpcId": vpc_id,
+                        "SecurityGroupIds": sg_ids
+                    })
             
             # --- 3. Collect RDS Instances (CORREGIDO) ---
             rds_paginator = rds_client.get_paginator("describe_db_instances")

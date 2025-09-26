@@ -1368,26 +1368,6 @@ window.showTrailAlertEventDetails = (alertIndex) => {
     detailContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 };
 
-
-
-// Mantener la función de cerrar igual
-window.closeTrailAlertDetails = () => {
-    const detailContainer = document.getElementById('trailalerts-event-detail-container');
-    if (detailContainer) {
-        detailContainer.innerHTML = '';
-        
-        // Remover highlight de las filas
-        const table = detailContainer.parentElement.querySelector('table');
-        if (table) {
-            table.querySelectorAll('tr.bg-blue-100').forEach(row => {
-                row.classList.remove('bg-blue-100');
-                row.classList.add('hover:bg-blue-50');
-            });
-        }
-    }
-};
-
-
 window.closeTrailAlertDetails = () => {
     const detailContainer = document.getElementById('trailalerts-event-detail-container');
     if (detailContainer) {
@@ -1414,54 +1394,6 @@ const getSeverityClass = (severity) => {
         'info': 'bg-gray-100 text-gray-800'
     };
     return classes[severity.toLowerCase()] || classes['info'];
-};
-
-// Función global para mostrar detalles de alerta
-window.showAlertDetails = (alertIndex) => {
-    if (!window.trailAlertsData?.results?.alerts?.[alertIndex]) return;
-    
-    const alert = window.trailAlertsData.results.alerts[alertIndex];
-    const modal = document.getElementById('generic-modal');
-    const modalTitle = document.getElementById('generic-modal-title');
-    const modalBody = document.getElementById('generic-modal-body');
-    
-    if (!modal || !modalTitle || !modalBody) return;
-    
-    modalTitle.textContent = `Security Alert: ${alert.title}`;
-    
-    modalBody.innerHTML = `
-        <div class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="text-sm font-medium text-gray-500">Severity</label>
-                    <div><span class="px-2 py-1 text-xs font-semibold rounded-full ${getSeverityClass(alert.severity)}">${alert.severity.toUpperCase()}</span></div>
-                </div>
-                <div>
-                    <label class="text-sm font-medium text-gray-500">Risk Score</label>
-                    <div class="text-lg font-bold">${alert.risk_score}/100</div>
-                </div>
-            </div>
-            
-            <div>
-                <label class="text-sm font-medium text-gray-500">Description</label>
-                <p class="text-gray-700">${alert.description}</p>
-            </div>
-            
-            <div>
-                <label class="text-sm font-medium text-gray-500">MITRE ATT&CK Techniques</label>
-                <div class="flex flex-wrap gap-2">
-                    ${alert.mitre_tags.map(tag => `<span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">${tag}</span>`).join('')}
-                </div>
-            </div>
-            
-            <div>
-                <label class="text-sm font-medium text-gray-500">Matched CloudTrail Event</label>
-                <pre class="bg-gray-100 p-3 rounded text-xs overflow-x-auto">${JSON.stringify(alert.matched_event, null, 2)}</pre>
-            </div>
-        </div>
-    `;
-    
-    modal.classList.remove('hidden');
 };
 
 const filterEventsByDateRange = (events, startDate, endDate) => {
