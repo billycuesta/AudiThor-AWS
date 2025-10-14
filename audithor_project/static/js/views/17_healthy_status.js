@@ -470,8 +470,12 @@ const populateFindingsReportData = () => {
 
     if (!regionFilter || !severityFilter || !sectionFilter || !impactFilter || !findingsList) return;
 
-    // ¡CAMBIO CLAVE! Creamos aquí la copia editable para trabajar sobre ella.
-    window.editableFindings = JSON.parse(JSON.stringify(window.lastHealthyStatusFindings || []));
+    if (!window.editableFindings || window.editableFindings.length === 0) {
+        console.log("%cHEALTHY_STATUS.JS: Inicializando 'editableFindings' desde la fuente original.", "color: #9A3412;");
+        window.editableFindings = JSON.parse(JSON.stringify(window.lastHealthyStatusFindings || []));
+    } else {
+        console.log("%cHEALTHY_STATUS.JS: 'editableFindings' ya existe. Se mantienen las ediciones.", "color: #059669;");
+    }
 
     if (window.editableFindings.length === 0) {
         findingsList.innerHTML = '<p class="text-gray-500 text-center py-8">No findings available yet. Please run an analysis from another section first.</p>';
@@ -540,7 +544,7 @@ const populateFindingsReportData = () => {
     });
 
     // Renderizar hallazgos iniciales sin filtros
-    renderFindingsSelectionList(findings);
+    applyReportFilters();
 
     // Actualizar el conteo de hallazgos
     updateFindingsCount(findings.length, findings.length, 'report-findings-count-display');
