@@ -140,6 +140,7 @@ def collect_waf_data(session):
     # Listas temporales para WAF Classic
     classic_global_acls = []
     classic_regional_acls = {} # Usaremos un diccionario para las regionales
+    cloudfront_associations = get_cloudfront_to_waf_map(session)
 
     # --- 1. Collect CloudFront (Global) Web ACLs from WAFv2 ---
     try:
@@ -155,6 +156,8 @@ def collect_waf_data(session):
             resources_raw = client_global.list_resources_for_web_acl(
                 WebACLArn=acl_summary["ARN"]
             ).get("ResourceArns", [])
+            cloudfront_arns = cloudfront_associations.get(acl_summary["ARN"], [])
+            resources_raw.extend(cloudfront_arns)
             
             logging_details = get_logging_configuration_details(
                 client_global, acl_summary["ARN"], "CLOUDFRONT"
@@ -421,3 +424,28 @@ def collect_waf_data(session):
             })
             
     return {"acls": all_acls, "ip_sets": all_ip_sets}
+
+
+def get_cloudfront_to_waf_map(session):
+    """
+    Crea un mapa de todas las distribuciones de CloudFront y sus WAFs (v2) asociados.
+    Devuelve un diccionario: { "waf_v2_arn": ["cloudfront_dist_arn_1", "cloudfront_dist_arn_2"] }
+    """
+    cf_to_waf_map = {}
+    try:
+        cf_client = session.client('cloudfront')
+        paginator = cf_client.get_paginator('list_distributions')
+        for page in paginator.paginate():
+            for dist in page.get('DistributionList', {}).get('Items', []):
+                # El campo WebACLId contiene el ARN completo para WAFv2
+                web_acl_arn = dist.get('WebACLId', '')
+                
+                # Nos aseguramos de que es un ARN de WAFv2 (y no un ID de WAF Classic)
+                if "arn:aws:wafv2" in web_acl_arn:
+                    if web_acl_arn not in cf_to_waf_map:
+                        cf_to_waf_map[web_acl_arn] = []
+                    cf_to_waf_map[web_acl_arn].append(dist['ARN'])
+    except ClientError as e:
+        # No es un error fatal, solo no podremos mapear CF
+        print(f"[WARN] No se pudieron listar las distribuciones de CloudFront para el mapeo de WAF: {e}")
+    return cf_to_waf_map
