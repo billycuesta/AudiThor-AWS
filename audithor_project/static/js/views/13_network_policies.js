@@ -77,8 +77,17 @@ export const buildNetworkPoliciesView = (forceTab = null) => {
     const applySgFiltersAndRender = () => {
         const selectedRegion = document.getElementById('sg-region-filter').value;
         const hideEmpty = document.getElementById('sg-hide-empty-filter').checked;
+        const searchTerm = document.getElementById('sg-text-filter')?.value.toLowerCase().trim() || '';
 
         let filteredSGs = security_groups.filter(sg => selectedRegion === 'all' || sg.Region === selectedRegion);
+
+        if (searchTerm) {
+            filteredSGs = filteredSGs.filter(sg => 
+                sg.GroupName.toLowerCase().includes(searchTerm) ||
+                sg.GroupId.toLowerCase().includes(searchTerm) ||
+                sg.VpcId.toLowerCase().includes(searchTerm)
+            );
+        }
 
         if (hideEmpty) {
             filteredSGs = filteredSGs.filter(sg => {
@@ -91,6 +100,9 @@ export const buildNetworkPoliciesView = (forceTab = null) => {
         }
         
         sgsContainer.innerHTML = renderSGsTable(filteredSGs, all_regions, selectedRegion, allResources, hideEmpty);
+        const textFilterInput = document.getElementById('sg-text-filter');
+        if(textFilterInput) textFilterInput.value = searchTerm;
+
     };
 
     summaryCardsContainer.innerHTML = createNetworkPoliciesSummaryCardsHtml();
@@ -143,11 +155,19 @@ container.addEventListener('change', (e) => {
             break;
         case 'sg-region-filter':
         case 'sg-hide-empty-filter':
+        case 'sg-text-filter': // Para que funcione al hacer clic fuera
             applySgFiltersAndRender();
             break;
         case 'vpc-diagram-hide-empty-filter':
             applyVpcDiagramFiltersAndRender();
             break;
+    }
+});
+
+container.addEventListener('input', (e) => {
+    // Este listener se encarga del filtrado en tiempo real para la caja de búsqueda
+    if (e.target.id === 'sg-text-filter') {
+        applySgFiltersAndRender();
     }
 });
 
@@ -342,7 +362,7 @@ const renderVPCsTable = (vpcs, allRegions, selectedRegion = 'all') => {
         const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
         const scopeComment = isScoped ? scopeDetails.comment : '';
         const scopeIcon = isScoped 
-            ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-pink-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>` 
+            ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>` 
             : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
         const scopeButton = `<button onclick="openScopeModal('${vpcArn}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
 
@@ -393,11 +413,15 @@ const renderSGsTable = (sgs, allRegions, selectedRegion = 'all', allResources, h
           <input id="sg-hide-empty-filter" type="checkbox" ${isChecked} class="h-4 w-4 rounded border-gray-300 text-[#eb3496] focus:ring-[#eb3496]">
           <label for="sg-hide-empty-filter" class="ml-2 text-sm font-medium text-gray-700">Hide SGs with no resources</label>
         </div>
+        <div class="flex items-center gap-2">
+            <label for="sg-text-filter" class="text-sm font-medium text-gray-700">Search:</label>
+            <input type="text" id="sg-text-filter" placeholder="Filter by Name, ID, VPC..." class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-[#eb3496] focus:border-[#eb3496] block p-1.5 w-64">
+        </div>
       </div>`;
 
     if (!sgs || sgs.length === 0) return `<div class="bg-white p-6 rounded-xl border border-gray-100">${filterControl}<p class="text-center text-gray-500 py-4">No Security Groups matching the selected filters were found.</p></div>`;
     
-    let table = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group Name</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Associated Resources</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+    let table = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group Name</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Associated Resources</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">';
     
     sgs.sort((a,b) => a.Region.localeCompare(b.Region)).forEach(sg => {
         const ec2Count = allResources.ec2.filter(i => i.Region === sg.Region && i.SecurityGroups.includes(sg.GroupId)).length;
@@ -417,10 +441,10 @@ const renderSGsTable = (sgs, allRegions, selectedRegion = 'all', allResources, h
         table += `<tr class="hover:bg-gray-50">
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${sg.Region}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${sg.GroupId}</td>
-            <td class="px-4 py-4 text-sm text-gray-600 break-all">${sg.GroupName}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 break-all">${sg.GroupName}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${sg.VpcId}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-center">${countCellHtml}</td>
-            <td class="px-4 py-4 text-sm text-gray-600 break-all">${sg.Description}</td>
-            <td class="px-4 py-4 text-sm text-gray-600 break-all">${tagsStr}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 break-all">${sg.Description}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm">${actionButton}</td>
         </tr>`;
     });
@@ -601,7 +625,7 @@ const runNetworkDetailAnalysis = async () => {
     };
 
     try {
-        const response = await fetch('http://127.0.0.1:5001/api/run-network-detail-audit', {
+        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-network-detail-audit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

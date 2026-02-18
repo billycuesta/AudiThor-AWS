@@ -425,7 +425,6 @@ def collect_waf_data(session):
             
     return {"acls": all_acls, "ip_sets": all_ip_sets}
 
-
 def get_cloudfront_to_waf_map(session):
     """
     Crea un mapa de todas las distribuciones de CloudFront y sus WAFs (v2) asociados.

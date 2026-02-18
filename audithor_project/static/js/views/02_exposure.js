@@ -354,6 +354,104 @@ export const openModalWithTlsDetails = (lbIndex, listenerIndex) => {
     modal.classList.remove('hidden');
 };
 
+export const openModalWithResourceMap = (lbIndex) => {
+    const modal = document.getElementById('details-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalContent = document.getElementById('modal-content');
+
+    const allLbs = Object.values(window.exposureApiData.results.details['ALB/NLB Public'] || {}).flat();
+    const lb = allLbs[lbIndex];
+
+    if (!modal || !lb) {
+        console.error("No se pudo encontrar el modal o los datos del balanceador.");
+        return;
+    }
+
+    modalTitle.textContent = `Resource Map for: ${lb.name}`;
+    
+    // Llamamos a una nueva función que generará el HTML del diagrama
+    modalContent.innerHTML = renderResourceMapDiagram(lb);
+    
+    modal.classList.remove('hidden');
+};
+
+const renderResourceMapDiagram = (lb) => {
+    // Inspirado en el estilo de network_policies.js
+    let diagramHtml = '<div class="flex items-start space-x-4 p-4 overflow-x-auto bg-gray-50 rounded-lg">';
+
+    // Columna 1: Listeners
+    let listenersHtml = `<div class="flex-shrink-0 w-48 space-y-3">
+        <h4 class="font-bold text-gray-700">Listeners (${lb.listeners.length})</h4>`;
+    if (lb.listeners.length > 0) {
+        lb.listeners.forEach(listener => {
+            listenersHtml += `
+                <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                    <p class="font-semibold text-sm text-[#204071]">${listener.protocol} : ${listener.port}</p>
+                    <p class="text-xs text-gray-500">${listener.rules ? listener.rules.length : '1'} rule(s)</p>
+                </div>`;
+        });
+    } else {
+        listenersHtml += `<div class="bg-white border border-gray-200 rounded-lg p-3 text-center text-xs text-gray-500">No listeners</div>`;
+    }
+    listenersHtml += '</div>';
+
+    // Columna 2: Rules (simplificado, asumiendo una regla por listener para este ejemplo)
+    let rulesHtml = `<div class="flex-shrink-0 w-64 space-y-3 pt-10">`; // pt-10 para alinear
+    lb.listeners.forEach(listener => {
+        // Asumimos que la información de la regla y el target group está en el listener
+        // En una implementación real, aquí iterarías sobre listener.rules
+        rulesHtml += `
+            <div class="relative flex items-center">
+                <div class="text-gray-400 absolute -left-6 top-1/2 -translate-y-1/2">⟶</div>
+                <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm flex-grow">
+                    <p class="font-semibold text-xs text-gray-500">Priority: default</p>
+                    <p class="font-semibold text-sm text-[#204071]">Forward to: <span class="font-mono">${listener.targetGroupName || 'N/A'}</span></p>
+                    <p class="text-xs text-gray-500 mt-1">Conditions: If no other rule applies</p>
+                </div>
+            </div>`;
+    });
+    rulesHtml += `</div>`;
+
+    // Columna 3: Target Groups
+    let targetGroupsHtml = `<div class="flex-shrink-0 w-64 space-y-3">
+        <h4 class="font-bold text-gray-700">Target Groups</h4>`;
+    lb.listeners.forEach(listener => {
+        const targetsCount = listener.targets ? listener.targets.length : 0;
+        targetGroupsHtml += `
+            <div class="relative flex items-center">
+                <div class="text-gray-400 absolute -left-6 top-1/2 -translate-y-1/2">⟶</div>
+                <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm flex-grow">
+                    <p class="font-semibold text-sm text-[#204071] break-all">
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 inline-block mr-1"><path d="M2 3a1 1 0 011-1h3.5a1 1 0 011 1v1.5a1 1 0 01-1 1H3a1 1 0 01-1-1V3zm2.5 7.5a1 1 0 011-1h3.5a1 1 0 011 1v1.5a1 1 0 01-1 1H5.5a1 1 0 01-1-1v-1.5zM2 12a1 1 0 011-1h3.5a1 1 0 011 1v1.5a1 1 0 01-1 1H3a1 1 0 01-1-1v-1.5z"></path></svg>
+                        ${listener.targetGroupName || 'N/A'}
+                    </p>
+                    <p class="text-xs text-gray-500">${targetsCount} targets</p>
+                    </div>
+            </div>`;
+    });
+    targetGroupsHtml += `</div>`;
+    
+    // Columna 4: Targets
+    let targetsHtml = `<div class="flex-shrink-0 w-48 space-y-3 pt-10">`;
+    lb.listeners.forEach(listener => {
+        targetsHtml += `<div class="relative flex items-center h-full">
+            <div class="text-gray-400 absolute -left-6 top-1/2 -translate-y-1/2">⟶</div>
+            <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm w-full">`;
+        if (listener.targets && listener.targets.length > 0) {
+            listener.targets.forEach(target => {
+                 targetsHtml += `<div class="text-sm font-mono text-gray-800">${target.Id}</div>`;
+            });
+        } else {
+            targetsHtml += `<p class="text-center text-xs text-gray-500">No targets</p>`;
+        }
+        targetsHtml += `</div></div>`;
+    });
+    targetsHtml += '</div>';
+
+    diagramHtml += listenersHtml + rulesHtml + targetGroupsHtml + targetsHtml + '</div>';
+    return diagramHtml;
+};
+
 const renderPublicLoadBalancersTable = (loadBalancersByRegion) => {
     const allLbs = Object.values(loadBalancersByRegion || {}).flat();
     if (allLbs.length === 0) {
@@ -375,17 +473,25 @@ const renderPublicLoadBalancersTable = (loadBalancersByRegion) => {
                 const statusBadge = listener.isOutdated
                     ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Outdated</span>'
                     : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Secure</span>';
+                
+                tableHtml += `<tr 
+                                class="hover:bg-blue-50 cursor-pointer" 
+                                onclick="openModalWithResourceMap(${lbIndex})">
 
-                tableHtml += `<tr class="hover:bg-gray-50">
                                 <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${lb.region}</td>
                                 <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${lb.name}</td>
                                 <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${listener.port} (${listener.protocol})</td>
                                 <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${listener.policyName}</td>
                                 <td class="px-4 py-4 whitespace-nowrap text-sm">${statusBadge}</td>
                                 <td class="px-4 py-4 text-center">
-                                    <button onclick="openModalWithTlsDetails(${lbIndex}, ${listenerIndex})" class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">View Details</button>
+                                    <button 
+                                        onclick="event.stopPropagation(); openModalWithTlsDetails(${lbIndex}, ${listenerIndex})" 
+                                        class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">
+                                        Details
+                                    </button>
                                 </td>
                             </tr>`;
+
             });
         } else {
             tableHtml += `<tr class="hover:bg-gray-50">
@@ -433,103 +539,127 @@ const renderApiGatewayTable = (apisByRegion) => {
         return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No public API Gateway endpoints were found.</p></div>';
     }
 
+    // AÑADIDO: Ordenar la lista para un índice estable
+    allApis.sort((a, b) => (a.region + a.name).localeCompare(b.region + b.name));
+
     let tableHtml = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
                     '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
                     '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">API Name</th>' +
                     '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">API ID</th>' +
                     '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">API Type</th>' +
                     '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Endpoint Type</th>' +
+                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Port</th>' +
+                    
+                    '' +
+                    '<th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Details</th>' +
+                    
                     '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stages</th>' +
                     '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Creation Date</th>' +
                     '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>' +
                     '<th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Invoke URL</th>' +
                     '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
 
-    Object.entries(apisByRegion).sort(([keyA], [keyB]) => keyA.localeCompare(keyB)).forEach(([region, apis]) => {
-        apis.forEach(api => {
-            // Manejar tanto el formato antiguo (string) como el nuevo (objeto)
-            let apiName = '';
-            let apiId = '';
-            let apiType = 'REST';
-            let endpointTypes = ['Regional'];
-            let stages = [];
-            let createdDate = 'N/A';
-            let description = 'No description';
-            let invokeUrl = 'N/A';
+    // MODIFICADO: Cambiado el bucle para usar la lista plana 'allApis'
+    allApis.forEach((api, apiIndex) => {
+        const region = api.region; // <-- Definir 'region' desde el objeto api
 
-            if (typeof api === 'string') {
-                // Formato antiguo - mantener compatibilidad
-                if (api.includes('(Regional)')) {
-                    apiName = api.replace(' (Regional)', '');
-                    endpointTypes = ['Regional'];
-                } else if (api.includes('(Edge)')) {
-                    apiName = api.replace(' (Edge)', '');
-                    endpointTypes = ['Edge Optimized'];
-                } else if (api.includes('(Private)')) {
-                    apiName = api.replace(' (Private)', '');
-                    endpointTypes = ['Private'];
-                } else {
-                    apiName = api;
-                }
-            } else if (typeof api === 'object') {
-                // Formato nuevo - usar todas las propiedades disponibles
-                apiName = api.name || 'Unknown API';
-                apiId = api.id || 'Unknown ID';
-                apiType = api.apiType || 'REST';
-                endpointTypes = api.endpointConfiguration || ['Regional'];
-                stages = api.stages || [];
-                createdDate = api.createdDate;
-                description = api.description || 'No description';
-                
-                // Construir URL de invocación
-                if (apiId && region) {
-                    const primaryStage = stages.length > 0 ? stages[0] : 'prod';
-                    invokeUrl = `https://${apiId}.execute-api.${region}.amazonaws.com/${primaryStage}/`;
-                }
+        // Manejar tanto el formato antiguo (string) como el nuevo (objeto)
+        let apiName = '';
+        let apiId = '';
+        let apiType = 'REST';
+        let endpointTypes = ['Regional'];
+        let stages = [];
+        let createdDate = 'N/A';
+        let description = 'No description';
+        let invokeUrl = 'N/A';
+
+        if (typeof api === 'string') {
+            // Formato antiguo - mantener compatibilidad
+            if (api.includes('(Regional)')) {
+                apiName = api.replace(' (Regional)', '');
+                endpointTypes = ['Regional'];
+            } else if (api.includes('(Edge)')) {
+                apiName = api.replace(' (Edge)', '');
+                endpointTypes = ['Edge Optimized'];
+            } else if (api.includes('(Private)')) {
+                apiName = api.replace(' (Private)', '');
+                endpointTypes = ['Private'];
+            } else {
+                apiName = api;
             }
+        } else if (typeof api === 'object') {
+            // Formato nuevo - usar todas las propiedades disponibles
+            apiName = api.name || 'Unknown API';
+            apiId = api.id || 'Unknown ID';
+            apiType = api.apiType || 'REST';
+            endpointTypes = api.endpointConfiguration || ['Regional'];
+            stages = api.stages || [];
+            createdDate = api.createdDate;
+            description = api.description || 'No description';
+            
+            // Construir URL de invocación
+            if (apiId && region) {
+                const primaryStage = stages.length > 0 ? stages[0] : 'prod';
+                invokeUrl = `https://${apiId}.execute-api.${region}.amazonaws.com/${primaryStage}/`;
+            }
+        }
 
-            // Formatear endpoint types
-            const endpointTypeText = endpointTypes.join(', ');
-            const endpointBadgeClass = endpointTypes.includes('REGIONAL') ? 'bg-blue-100 text-blue-800' : 
-                                     endpointTypes.includes('EDGE') ? 'bg-green-100 text-green-800' :
-                                     'bg-purple-100 text-purple-800';
+        // Formatear endpoint types
+        const endpointTypeText = endpointTypes.join(', ');
+        const endpointBadgeClass = endpointTypes.includes('REGIONAL') ? 'bg-blue-100 text-blue-800' : 
+                                 endpointTypes.includes('EDGE') ? 'bg-green-100 text-green-800' :
+                                 'bg-purple-100 text-purple-800';
 
-            // Formatear API type
-            const apiTypeBadgeClass = apiType === 'REST' ? 'bg-indigo-100 text-indigo-800' : 'bg-cyan-100 text-cyan-800';
+        // Formatear API type
+        const apiTypeBadgeClass = apiType === 'REST' ? 'bg-indigo-100 text-indigo-800' : 'bg-cyan-100 text-cyan-800';
 
-            // Formatear stages
-            const stagesHtml = stages.length > 0 ? 
-                stages.map(stage => `<span class="inline-block bg-gray-100 text-gray-800 text-xs font-medium mr-1 mb-1 px-2 py-0.5 rounded">${stage}</span>`).join('') :
-                '<span class="text-gray-400 text-xs">No stages</span>';
+        // Formatear stages
+        const stagesHtml = stages.length > 0 ? 
+            stages.map(stage => `<span class="inline-block bg-gray-100 text-gray-800 text-xs font-medium mr-1 mb-1 px-2 py-0.5 rounded">${stage}</span>`).join('') :
+            '<span class="text-gray-400 text-xs">No stages</span>';
 
-            // Formatear fecha
-            const formattedDate = createdDate && createdDate !== 'N/A' ? 
-                new Date(createdDate).toLocaleDateString() : 'N/A';
+        // Formatear fecha
+        const formattedDate = createdDate && createdDate !== 'N/A' ? 
+            new Date(createdDate).toLocaleDateString() : 'N/A';
 
-            tableHtml += `<tr class="hover:bg-gray-50">
-                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${region}</td>
-                            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${apiName}</td>
-                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${apiId}</td>
-                            <td class="px-4 py-4 whitespace-nowrap text-sm">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${apiTypeBadgeClass}">${apiType}</span>
-                            </td>
-                            <td class="px-4 py-4 whitespace-nowrap text-sm">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${endpointBadgeClass}">${endpointTypeText}</span>
-                            </td>
-                            <td class="px-4 py-4 text-sm text-gray-600 break-words max-w-xs">${stagesHtml}</td>
-                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${formattedDate}</td>
-                            <td class="px-4 py-4 text-sm text-gray-600 break-words max-w-xs" title="${description}">${description.length > 50 ? description.substring(0, 50) + '...' : description}</td>
-                            <td class="px-4 py-4 text-center">
-                                ${invokeUrl !== 'N/A' ? 
-                                    `<button onclick="copyToClipboard(this, '${invokeUrl}')" title="${invokeUrl}" class="p-1 rounded-md hover:bg-gray-200 transition">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard w-5 h-5 text-gray-500" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
-                                    </button>` : 
-                                    '<span class="text-gray-400 text-xs">N/A</span>'
-                                }
-                            </td>
-                        </tr>`;
-        });
-    });
+        tableHtml += `<tr class="hover:bg-gray-50">
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${region}</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${apiName}</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${apiId}</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${apiTypeBadgeClass}">${apiType}</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${endpointBadgeClass}">${endpointTypeText}</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                443 (HTTPS)
+                            </span>
+                        </td>
+
+                        <td class="px-4 py-4 text-center">
+                            <button 
+                                onclick="event.stopPropagation(); openModalWithApiMap(${apiIndex})" 
+                                class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">
+                                Map
+                            </button>
+                        </td>
+
+                        <td class="px-4 py-4 text-sm text-gray-600 break-words max-w-xs">${stagesHtml}</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${formattedDate}</td>
+                        <td class="px-4 py-4 text-sm text-gray-600 break-words max-w-xs" title="${description}">${description.length > 50 ? description.substring(0, 50) + '...' : description}</td>
+                        <td class="px-4 py-4 text-center">
+                            ${invokeUrl !== 'N/A' ? 
+                                `<button onclick="copyToClipboard(this, '${invokeUrl}')" title="${invokeUrl}" class="p-1 rounded-md hover:bg-gray-200 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard w-5 h-5 text-gray-500" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
+                                </button>` : 
+                                '<span class="text-gray-400 text-xs">N/A</span>'
+                            }
+                        </td>
+                    </tr>`;
+    }); // <-- MODIFICADO: Bucle 'forEach' simple
+    // }); <-- ELIMINADO: Cierre del bucle 'Object.entries'
 
     tableHtml += '</tbody></table></div>';
     return tableHtml;
@@ -737,7 +867,7 @@ window.runS3BucketSecurityCheck = async (bucketName) => {
             bucket_name: bucketName
         };
 
-        const response = await fetch('http://127.0.0.1:5001/api/run-s3-security-check', {
+        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-s3-security-check', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -1189,5 +1319,131 @@ window.openLambdaCredentialDetails = (credentialIndex) => {
         </div>
     `;
     
+    modal.classList.remove('hidden');
+};
+
+
+const renderApiMapDiagram = (api) => {
+    if (!api) return '<p class="text-gray-500">No API data found.</p>';
+
+    const integrations = api.integrations || [];
+    const stages = api.stages || [];
+
+    // --- Col 1: Stages ---
+    let stagesHtml = '';
+    if (stages.length > 0) {
+        stages.forEach(stage => {
+            stagesHtml += `
+                <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                    <p class="font-semibold text-sm text-[#204071]">${stage}</p>
+                </div>`;
+        });
+    } else {
+        stagesHtml += `<div class="bg-white border border-gray-200 rounded-lg p-3 text-center text-xs text-gray-500">No stages</div>`;
+    }
+
+    // --- Col 2 & 3: Resources & Backends (vinculados) ---
+    let resourcesHtml = '';
+    let backendsHtml = '';
+    
+    if (integrations.length > 0) {
+        // Ordenar para agrupar (opcional, pero más limpio)
+        integrations.sort((a, b) => (a.path + a.method).localeCompare(b.path + b.method));
+        
+        integrations.forEach(integ => {
+            const method = integ.method ? `<span class="px-2 py-0.5 text-xs font-semibold rounded-full ${integ.method === 'OPTIONS' ? 'bg-gray-100 text-gray-700' : 'bg-blue-100 text-blue-800'}">${integ.method}</span>` : '';
+            const path = integ.path || 'N/A';
+            
+            // Col 2 Box
+            resourcesHtml += `
+                <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm flex-grow">
+                    <div class="flex justify-between items-center">
+                        <p class="font-semibold text-sm text-[#204071] break-all">${path}</p>
+                        ${method}
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">${integ.type || 'N/A'}</p>
+                </div>`;
+
+            // Col 3 Box
+            let backendName = integ.uri || 'N/A';
+            let icon = 'M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20ZM12.94 13.06L10.88 15.12L8.7 12.94L7.29 14.35L10.88 17.94L14.35 14.47L12.94 13.06Z'; // Icono genérico
+            
+            if (integ.type === 'MOCK') {
+                backendName = 'N/A';
+            } else if (backendName.includes('lambda:path')) {
+                backendName = backendName.split('/').pop();
+            } else if (backendName.includes('arn:aws:apigateway:')) {
+                backendName = backendName.split(':').pop().replace('integration', '');
+            }
+
+            backendsHtml += `
+                <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm flex-grow">
+                    <p class="font-semibold text-sm ${integ.type === 'MOCK' ? 'text-gray-500' : 'text-green-700'} break-all">
+                        <svg fill="currentColor" class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24"><path d="${icon}"></path></svg>
+                        ${backendName}
+                    </p>
+                    <p class="text-xs text-gray-500">${integ.type}</p>
+                </div>`;
+        });
+    } else {
+        resourcesHtml += `<div class="bg-white border border-gray-200 rounded-lg p-3 text-center text-xs text-gray-500">No resources defined</div>`;
+        backendsHtml += `<div class="bg-white border border-gray-200 rounded-lg p-3 text-center text-xs text-gray-500">No integrations</div>`;
+    }
+
+    // --- Ensamblar el HTML final con la nueva estructura ---
+    return `
+    <div class="flex items-stretch space-x-2 p-4 overflow-x-auto bg-gray-50 rounded-lg">
+        
+        <div class="flex flex-col flex-shrink-0 w-48">
+            <h4 class="font-bold text-sm text-gray-700 mb-2 text-center">Stages (${stages.length})</h4>
+            <div class="flex flex-col justify-center space-y-3 flex-grow">
+                ${stagesHtml}
+            </div>
+        </div>
+        
+        <div class="flex flex-col justify-center flex-shrink-0">
+            <div class="text-gray-400 text-2xl mx-2">⟶</div>
+        </div>
+
+        <div class="flex flex-col flex-shrink-0 w-64">
+            <h4 class="font-bold text-sm text-gray-700 mb-2 text-center">Resources (${integrations.length})</h4>
+            <div class="flex flex-col justify-center space-y-3 flex-grow">
+                ${resourcesHtml}
+            </div>
+        </div>
+        
+        <div class="flex flex-col justify-center flex-shrink-0">
+            <div class="text-gray-400 text-2xl mx-2">⟶</div>
+        </div>
+
+        <div class="flex flex-col flex-shrink-0 w-64">
+            <h4 class="font-bold text-sm text-gray-700 mb-2 text-center">Integrations (${integrations.length})</h4>
+            <div class="flex flex-col justify-center space-y-3 flex-grow">
+                ${backendsHtml}
+            </div>
+        </div>
+
+    </div>`;
+};
+
+/**
+ * Abre el modal para mostrar el mapa de recursos de una API Gateway.
+ */
+window.openModalWithApiMap = (apiIndex) => {
+    const modal = document.getElementById('details-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalContent = document.getElementById('modal-content');
+
+    const allApis = Object.values(window.exposureApiData.results.details['API Gateway Public'] || {}).flat().sort((a, b) => (a.region + a.name).localeCompare(b.region + b.name));
+    const api = allApis[apiIndex];
+
+    if (!modal || !api) {
+        console.error("No se pudo encontrar el modal o los datos de la API.");
+        return;
+    }
+
+    modalTitle.textContent = `Resource Map for: ${api.name}`;
+    modalContent.innerHTML = renderApiMapDiagram(api);
+
     modal.classList.remove('hidden');
 };

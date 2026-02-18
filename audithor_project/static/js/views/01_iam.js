@@ -382,7 +382,7 @@ export const openModalWithUserRoles = async (username, userIndex) => {
     };
 
     try {
-        const response = await fetch('http://127.0.0.1:5001/api/get-user-assumable-roles', {
+        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/get-user-assumable-roles', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -736,7 +736,7 @@ export const openModalWithSsoDetails = async (groupId, groupName) => {
     };
 
     try {
-        const response = await fetch('http://127.0.0.1:5001/api/get-sso-group-members', {
+        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/get-sso-group-members', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -1283,7 +1283,7 @@ const analyzeCustomPolicy = async (policyName) => {
     };
 
     try {
-        const response = await fetch('http://127.0.0.1:5001/api/analyze-custom-policy', {
+        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/analyze-custom-policy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

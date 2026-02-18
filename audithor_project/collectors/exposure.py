@@ -127,10 +127,34 @@ def collect_api_gateway_details(session, region):
             # Check if it's a public API (Regional or Edge-optimized, exclude Private)
             public_endpoint_types = [t for t in endpoint_types if t in ["REGIONAL", "EDGE"]]
             if public_endpoint_types:
+                integrations = []
                 # Get additional details about stages
                 try:
                     stages_response = client.get_stages(restApiId=api["id"])
                     stages = [stage["stageName"] for stage in stages_response.get("item", [])]
+                    try:
+                        resources_response = client.get_resources(restApiId=api["id"])
+                        for resource in resources_response.get("items", []):
+                            resource_path = resource.get("path")
+                            for method_name in resource.get("resourceMethods", {}).keys():
+                                try:
+                                    # Get_integration nos dice qué hay detrás de este método
+                                    integration = client.get_integration(
+                                        restApiId=api["id"],
+                                        resourceId=resource["id"],
+                                        httpMethod=method_name
+                                    )
+                                    integrations.append({
+                                        "path": resource_path,
+                                        "method": method_name,
+                                        "type": integration.get("type"),
+                                        "uri": integration.get("uri")
+                                    })
+                                except ClientError:
+                                    # Ignorar métodos sin integración (ej: OPTIONS)
+                                    pass
+                    except ClientError:
+                        pass # No se pudieron obtener los resources
                 except ClientError:
                     stages = []
                 
@@ -151,7 +175,9 @@ def collect_api_gateway_details(session, region):
                     "endpointConfiguration": formatted_endpoint_types,
                     "stages": stages,
                     "region": region,
-                    "apiType": "REST"
+                    "apiType": "REST",
+                    "integrations": integrations
+
                 }
                 apis.append(api_info)
         
@@ -164,9 +190,32 @@ def collect_api_gateway_details(session, region):
                 # HTTP APIs are typically public by default unless configured otherwise
                 if api.get("ProtocolType") == "HTTP":
                     # Get stages for HTTP API
+                    integrations = []
                     try:
                         stages_response = apiv2_client.get_stages(ApiId=api["ApiId"])
                         stages = [stage["StageName"] for stage in stages_response.get("Items", [])]
+                        
+                        try:
+                            # 1. Obtenemos un mapa de todas las integraciones
+                            integrations_map = {
+                                integ["IntegrationId"]: integ 
+                                for integ in apiv2_client.get_integrations(ApiId=api["ApiId"]).get("Items", [])
+                            }
+
+                            # 2. Obtenemos las rutas y las mapeamos a las integraciones
+                            routes_response = apiv2_client.get_routes(ApiId=api["ApiId"])
+                            for route in routes_response.get("Items", []):
+                                target_id = route.get("Target", "").split('/')[-1]
+                                integration = integrations_map.get(target_id, {})
+
+                                integrations.append({
+                                    "path": route.get("RouteKey"), # ej: "GET /pets"
+                                    "method": "", # En V2 el método está en el 'path'
+                                    "type": integration.get("IntegrationType"),
+                                    "uri": integration.get("IntegrationUri")
+                                })
+                        except ClientError:
+                            pass # No se pudieron obtener las rutas/integraciones
                     except ClientError:
                         stages = []
                     
@@ -179,7 +228,8 @@ def collect_api_gateway_details(session, region):
                         "endpointConfiguration": ["Regional"],  # HTTP APIs are regional by default
                         "stages": stages,
                         "region": region,
-                        "apiType": "HTTP"
+                        "apiType": "HTTP",
+                        "integrations": integrations
                     }
                     apis.append(api_info)
         except ClientError:

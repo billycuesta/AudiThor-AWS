@@ -38,12 +38,12 @@ import { buildNetworkPoliciesView, openModalWithVpcTags } from '/static/js/views
 import { buildConnectivityView } from '/static/js/views/14_connectivity.js';
 import { buildConfigSHView } from '/static/js/views/15_config_sh.js';
 import { buildCodePipelineView } from '/static/js/views/18_codepipeline.js';
+import { buildInventoryView } from '/static/js/views/21_inventory.js';
 import { buildPlaygroundView } from '/static/js/views/16_playground.js';
-import { buildHealthyStatusView, buildGeminiReportView, buildScopedInventoryView, buildAuditorNotesView } from '/static/js/views/17_healthy_status.js';
 
 
 // Importar las funciones que se usarán en onclick
-import { openModalWithTlsDetails } from '/static/js/views/02_exposure.js';
+import { openModalWithTlsDetails, openModalWithResourceMap } from '/static/js/views/02_exposure.js';
 import { openModalWithEcrPolicy } from '/static/js/views/04_ecr.js';
 import { openModalWithKmsPolicy, openModalWithSecretDetails } from '/static/js/views/12_kms_secrets.js';
 import { showCloudtrailEventDetails } from '/static/js/views/06_cloudtrail.js';
@@ -71,19 +71,21 @@ window.databasesApiData = null;
 window.networkPoliciesApiData = null;
 window.connectivityApiData = null;
 window.codepipelineApiData = null;
+window.inventoryApiData = null;
 window.playgroundApiData = null;
 window.configSHApiData = null;
 window.configSHStatusApiData = null;
 window.kmsApiData = null;
 window.allAvailableRegions = [];
 window.lastCloudtrailLookupResults = [];
-window.lastHealthyStatusFindings = [];
 window.trailAlertsData = null;
 window.scopedResources = {};
 window.auditorNotes = [];
 
 // 3. SELECTORES
 let views, mainNavLinks, runAnalysisBtn, accessKeyInput, secretKeyInput, sessionTokenInput, loadingSpinner, buttonText, errorMessageDiv, logContainer, clearLogBtn, toggleLogBtn, logPanel;
+let landingView, mainAppView, landingRunAnalysisBtn, landingImportResultsBtn, landingAccessKeyInput, landingSecretKeyInput, landingSessionTokenInput, landingLoadingSpinner, landingButtonText, landingErrorMessageDiv;
+let hasCompletedInitialScan = false;
 
 // 4. LÓGICA PRINCIPAL
 const loadSidebarIcons = () => {
@@ -93,7 +95,7 @@ const loadSidebarIcons = () => {
     const navLinks = sidebarNav.querySelectorAll('a[data-view]');
     navLinks.forEach(link => {
         const viewName = link.dataset.view;
-        const iconKey = viewName === 'healthy-status' ? 'healthy-status' : viewName;
+        const iconKey = viewName;
         
         if (SIDEBAR_ICONS[iconKey]) {
             const span = link.querySelector('span');
@@ -138,34 +140,30 @@ const saveScopedResources = () => {
 };
 
 const setResourceScope = (arn, comment) => {
-    if (arn && comment) {
-        window.scopedResources[arn] = { comment: comment };
-        log(`Recurso ${arn} marcado como 'in scope'.`, 'success');
+    const normalizedComment = (comment || '').trim();
+    if (!arn) return false;
+    if (!normalizedComment) {
+        log('Debes indicar un motivo para marcar el recurso en scope.', 'warning');
+        return false;
     }
+
+    window.scopedResources[arn] = { comment: normalizedComment };
+    log(`Recurso ${arn} marcado como 'in scope'.`, 'success');
     saveScopedResources();
     rerenderCurrentView(); // Función para refrescar la vista actual
+    return true;
 };
 
 
 const removeResourceScope = (arn) => {
-    console.log('%c[LOG DESDE app.js] -> Se ha llamado a la función GLOBAL removeResourceScope.', 'color: green; font-weight: bold;');
-
-    console.group(`[APP] Attempting to remove scope for ARN: ${arn}`);
-    
     if (arn && window.scopedResources[arn]) {
-        console.log('Before Deletion:', JSON.parse(JSON.stringify(window.scopedResources)));
         delete window.scopedResources[arn];
-        console.log('After Deletion:', JSON.parse(JSON.stringify(window.scopedResources)));
         log(`Resource ${arn} unmarked.`, 'info');
         saveScopedResources();
-        
-        console.log('Now calling rerenderCurrentView() to update the UI...');
         rerenderCurrentView();
-
     } else {
-        console.error('ARN not found in scopedResources. Nothing to remove.');
+        log('ARN not found in scopedResources. Nothing to remove.', 'warning');
     }
-    console.groupEnd();
 };
 
 
@@ -218,7 +216,7 @@ const saveOrUpdateNote = (noteId, noteContent, noteTitle, noteArn, noteControl, 
     }
 
     saveAuditorNotes();
-    buildAuditorNotesView(); // Refresca la vista para mostrar los cambios
+    rerenderCurrentView();
 };
 
 const openNotesModal = (noteId = null) => {
@@ -249,7 +247,9 @@ const openNotesModal = (noteId = null) => {
     } else {
         // --- MODO CREACIÓN ---
         const activeViewLink = document.querySelector('#sidebar-nav a.bg-\\[\\#eb3496\\]');
-        const viewText = activeViewLink ? activeViewLink.querySelector('span div:last-child').textContent : 'General';
+        const viewText = activeViewLink
+            ? ((activeViewLink.querySelector('span')?.textContent || activeViewLink.dataset.view || 'General').trim())
+            : 'General';
         titleHeader.textContent = `New Note for: ${viewText}`;
         textarea.value = '';
         titleInput.value = '';
@@ -287,68 +287,42 @@ const openNotesModal = (noteId = null) => {
 const rerenderCurrentView = () => {
     log('Rerendering view(s) to reflect state changes...', 'info');
 
-    // 1. Identificar la vista activa en la barra lateral
     const activeLink = document.querySelector('#sidebar-nav a.bg-\\[\\#eb3496\\]');
     if (!activeLink) {
         log('Could not find an active view to rerender.', 'warning');
         return;
     }
-    
+
     const activeViewName = activeLink.dataset.view;
-    log(`Active view identified: ${activeViewName}`, 'info');
+    const activeSubTab = document.querySelector(`#${activeViewName}-view .tab-link.border-\\[\\#eb3496\\]`);
+    const viewRenderers = {
+        'iam': buildIamView,
+        'exposure': buildExposureView,
+        'guardduty': buildGuarddutyView,
+        'ecr': buildEcrView,
+        'waf': buildWafView,
+        'cloudtrail': buildCloudtrailView,
+        'cloudwatch': buildCloudwatchView,
+        'inspector': buildInspectorView,
+        'acm': buildAcmView,
+        'compute': buildComputeView,
+        'databases': buildDatabasesView,
+        'kms-secrets': buildKmsSecretsView,
+        'network-policies': buildNetworkPoliciesView,
+        'connectivity': buildConnectivityView,
+        'config-sh': buildConfigSHView,
+        'codepipeline': buildCodePipelineView,
+        'auditor-notes': buildAuditorNotesView,
+        'inventory': buildInventoryView,
+        'playground': buildPlaygroundView
+    };
 
-    // 2. LÓGICA DE REFRESCO INTELIGENTE
-    
-    // CASO ESPECIAL: Si estamos en Healthy Status, solo refrescamos el inventario para no salirnos de la pestaña.
-    if (activeViewName === 'healthy-status') {
-        log('Currently in Healthy Status view. Refreshing ONLY the scoped inventory tab.', 'info');
-        buildScopedInventoryView(); 
-    } else {
-        // CASO GENERAL: Si estamos en cualquier otra vista, la refrescamos por completo.
-        const activeSubTab = document.querySelector(`#${activeViewName}-view .tab-link.border-\\[\\#eb3496\\]`);
-        const viewRenderers = {
-            'iam': buildIamView,
-            'exposure': buildExposureView,
-            'guardduty': buildGuarddutyView,
-            'ecr': buildEcrView,
-            'waf': buildWafView,
-            'cloudtrail': buildCloudtrailView,
-            'cloudwatch': buildCloudwatchView,
-            'inspector': buildInspectorView,
-            'acm': buildAcmView,
-            'compute': buildComputeView,
-            'databases': buildDatabasesView,
-            'kms-secrets': buildKmsSecretsView,
-            'network-policies': buildNetworkPoliciesView,
-            'connectivity': buildConnectivityView,
-            'config-sh': buildConfigSHView,
-            'codepipeline': buildCodePipelineView,
-            'playground': buildPlaygroundView
-        };
-        
-        const renderFunction = viewRenderers[activeViewName];
-        if (renderFunction) {
-            log(`Calling full renderer for active view: '${activeViewName}'...`, 'info');
-            renderFunction();
-            if (activeSubTab) document.querySelector(`[data-tab="${activeSubTab.dataset.tab}"]`)?.click();
-        }
-    }
-
-    // 3. REFRESCO ADICIONAL EN SEGUNDO PLANO
-    // Forzamos el refresco de las vistas clave, SIEMPRE Y CUANDO no sea la que ya tenemos activa.
-    log('Performing background refresh of key views...', 'info');
-    
-    if (window.networkPoliciesApiData && activeViewName !== 'network-policies') { // <-- CORRECCIÓN AÑADIDA
-        buildNetworkPoliciesView();
-    }
-    if (window.computeApiData && activeViewName !== 'compute') { // <-- CORRECCIÓN AÑADIDA
-        buildComputeView();
-    }
-    if (window.databasesApiData && activeViewName !== 'databases') { // <-- CORRECCIÓN AÑADIDA
-        buildDatabasesView();
+    const renderFunction = viewRenderers[activeViewName];
+    if (renderFunction) {
+        renderFunction();
+        if (activeSubTab) document.querySelector(`[data-tab="${activeSubTab.dataset.tab}"]`)?.click();
     }
 };
-
 
 // Función para abrir y manejar el modal de scope
 const openScopeModal = (arn, currentComment = '') => {
@@ -362,7 +336,11 @@ const openScopeModal = (arn, currentComment = '') => {
     if (!modal) return;
 
     title.textContent = `Marcar Recurso: ${arn.split('/').pop()}`;
-    textarea.value = decodeURIComponent(currentComment);
+    try {
+        textarea.value = decodeURIComponent(currentComment || '');
+    } catch {
+        textarea.value = currentComment || '';
+    }
 
     // Limpiar listeners antiguos para evitar ejecuciones múltiples
     const newSaveBtn = saveBtn.cloneNode(true);
@@ -372,8 +350,15 @@ const openScopeModal = (arn, currentComment = '') => {
     unscopeBtn.parentNode.replaceChild(newUnscopeBtn, unscopeBtn);
 
     newSaveBtn.addEventListener('click', () => {
-        setResourceScope(arn, textarea.value);
+        const comment = textarea.value.trim();
+        if (!comment) {
+            alert('Please provide a reason before marking this resource in scope.');
+            textarea.focus();
+            return;
+        }
+
         modal.classList.add('hidden');
+        setResourceScope(arn, comment);
     });
 
     newUnscopeBtn.addEventListener('click', () => {
@@ -411,37 +396,111 @@ const handleMainNavClick = (e) => {
     if (targetViewElement) {
         targetViewElement.classList.remove('hidden');
     }
-    if (targetView === 'healthy-status') {
-        log('Refreshing scoped inventory view...', 'info');
-        buildScopedInventoryView();
+    if (targetView === 'inventory') {
+        buildInventoryView();
+    }
+    if (targetView === 'auditor-notes') {
         buildAuditorNotesView();
     }
 };
 
-const runAnalysisFromInputs = async () => {
+const setWorkspaceVisibility = (showMainApp) => {
+    if (showMainApp) {
+        landingView?.classList.add('hidden');
+        mainAppView?.classList.remove('hidden');
+    } else {
+        mainAppView?.classList.add('hidden');
+        landingView?.classList.remove('hidden');
+    }
+};
+
+const syncCredentialsBetweenForms = (source = 'main') => {
+    if (source === 'landing') {
+        if (accessKeyInput && landingAccessKeyInput) accessKeyInput.value = landingAccessKeyInput.value;
+        if (secretKeyInput && landingSecretKeyInput) secretKeyInput.value = landingSecretKeyInput.value;
+        if (sessionTokenInput && landingSessionTokenInput) sessionTokenInput.value = landingSessionTokenInput.value;
+        return;
+    }
+    if (landingAccessKeyInput && accessKeyInput) landingAccessKeyInput.value = accessKeyInput.value;
+    if (landingSecretKeyInput && secretKeyInput) landingSecretKeyInput.value = secretKeyInput.value;
+    if (landingSessionTokenInput && sessionTokenInput) landingSessionTokenInput.value = sessionTokenInput.value;
+};
+
+const getScanControls = (source = 'main') => {
+    if (source === 'landing') {
+        return {
+            runBtn: landingRunAnalysisBtn,
+            accessInput: landingAccessKeyInput,
+            secretInput: landingSecretKeyInput,
+            tokenInput: landingSessionTokenInput,
+            spinner: landingLoadingSpinner,
+            btnText: landingButtonText,
+            errorDiv: landingErrorMessageDiv
+        };
+    }
+    return {
+        runBtn: runAnalysisBtn,
+        accessInput: accessKeyInput,
+        secretInput: secretKeyInput,
+        tokenInput: sessionTokenInput,
+        spinner: loadingSpinner,
+        btnText: buttonText,
+        errorDiv: errorMessageDiv
+    };
+};
+
+const activateDefaultViewPostScan = () => {
+    document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+    const iamViewToShow = document.getElementById('iam-view');
+    if (iamViewToShow) iamViewToShow.classList.remove('hidden');
+
+    const sidebarLinks = document.querySelectorAll('#sidebar-nav a.main-nav-link');
+    sidebarLinks.forEach(link => {
+        link.classList.remove('bg-[#eb3496]');
+        link.classList.add('hover:bg-[#1a335a]');
+    });
+    const activeIamLink = document.querySelector('#sidebar-nav a[data-view="iam"]');
+    if (activeIamLink) {
+        activeIamLink.classList.add('bg-[#eb3496]');
+        activeIamLink.classList.remove('hover:bg-[#1a335a]');
+    }
+};
+
+const runAnalysisFromInputs = async (source = 'main') => {
+    const controls = getScanControls(source);
+    const { runBtn, accessInput, secretInput, tokenInput, spinner, btnText, errorDiv } = controls;
+
+    if (!runBtn || !accessInput || !secretInput || !spinner || !btnText || !errorDiv) return;
+
+    if (source === 'landing') {
+        syncCredentialsBetweenForms('landing');
+    } else {
+        syncCredentialsBetweenForms('main');
+    }
+
     // Resetear estado
-    window.iamApiData = null; window.securityHubApiData = null; window.exposureApiData = null; window.guarddutyApiData = null; window.wafApiData = null; window.cloudtrailApiData = null; window.cloudwatchApiData = null; window.inspectorApiData = null; window.acmApiData = null; window.computeApiData = null; window.databasesApiData = null; window.networkPoliciesApiData = null; window.connectivityApiData = null; window.playgroundApiData = null; window.allAvailableRegions = []; window.lastCloudtrailLookupResults = []; window.federationApiData = null; window.configSHApiData = null; window.configSHStatusApiData = null; window.kmsApiData = null; window.ecrApiData = null; window.codepipelineApiData = null; window.secretsManagerApiData = null;
+    window.iamApiData = null; window.securityHubApiData = null; window.exposureApiData = null; window.guarddutyApiData = null; window.wafApiData = null; window.cloudtrailApiData = null; window.cloudwatchApiData = null; window.inspectorApiData = null; window.acmApiData = null; window.computeApiData = null; window.databasesApiData = null; window.networkPoliciesApiData = null; window.connectivityApiData = null; window.playgroundApiData = null; window.allAvailableRegions = []; window.lastCloudtrailLookupResults = []; window.federationApiData = null; window.configSHApiData = null; window.configSHStatusApiData = null; window.kmsApiData = null; window.ecrApiData = null; window.codepipelineApiData = null; window.secretsManagerApiData = null; window.inventoryApiData = null;
     document.querySelectorAll('.view').forEach(v => v.innerHTML = '');
     document.getElementById('iam-view').innerHTML = createInitialEmptyState();
     
     log('Starting full analysis...', 'info');
-    const accessKey = accessKeyInput.value.trim(); 
-    const secretKey = secretKeyInput.value.trim(); 
-    const sessionToken = sessionTokenInput.value.trim();
+    const accessKey = accessInput.value.trim(); 
+    const secretKey = secretInput.value.trim(); 
+    const sessionToken = tokenInput.value.trim();
     if (!accessKey || !secretKey) { 
         const msg = 'Please enter the Access Key ID and Secret Access Key.'; 
-        errorMessageDiv.textContent = msg; 
-        errorMessageDiv.classList.remove('hidden'); 
+        errorDiv.textContent = msg; 
+        errorDiv.classList.remove('hidden'); 
         log(msg, 'error'); 
         return; 
     }
     const payload = { access_key: accessKey, secret_key: secretKey };
     if (sessionToken) { payload.session_token = sessionToken; }
     
-    runAnalysisBtn.disabled = true; 
-    loadingSpinner.classList.remove('hidden'); 
-    buttonText.textContent = 'Scanning...'; 
-    errorMessageDiv.classList.add('hidden');
+    runBtn.disabled = true; 
+    spinner.classList.remove('hidden'); 
+    btnText.textContent = 'Scanning...'; 
+    errorDiv.classList.add('hidden');
     
     try {
         log('Calling all AWS APIs...', 'info');
@@ -465,7 +524,8 @@ const runAnalysisFromInputs = async () => {
             kms: fetch('http://127.0.0.1:5001/api/run-kms-audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
             secrets_manager: fetch('http://127.0.0.1:5001/api/run-secrets-manager-audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
             connectivity: fetch('http://127.0.0.1:5001/api/run-connectivity-audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
-            codepipeline: fetch('http://127.0.0.1:5001/api/run-codepipeline-audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+            codepipeline: fetch('http://127.0.0.1:5001/api/run-codepipeline-audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
+            inventory: fetch('http://127.0.0.1:5001/api/run-inventory-audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         };
         
         const promises = Object.entries(apiCalls).map(async ([key, promise]) => {
@@ -505,6 +565,7 @@ const runAnalysisFromInputs = async () => {
         window.secretsManagerApiData = results.secrets_manager;
         window.connectivityApiData = results.connectivity;
         window.codepipelineApiData = results.codepipeline;
+        window.inventoryApiData = results.inventory;
         window.lastAwsAccountId = window.iamApiData?.metadata?.accountId;
         window.regionsIncluded = window.iamApiData?.metadata?.regions || [];
         
@@ -524,78 +585,153 @@ const runAnalysisFromInputs = async () => {
         log('All data has been received.', 'success');
         
         buildAndRenderAllViews();
-        await runAndDisplayHealthyStatus();
+        hasCompletedInitialScan = true;
+        setWorkspaceVisibility(true);
 
-        // INICIA LA CORRECCIÓN
         log('Activating the Identity & Access view post-scan...', 'info');
-
-        // Ocultar todas las vistas
-        document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
-        
-        // Mostrar la vista de IAM
-        const iamViewToShow = document.getElementById('iam-view');
-        if (iamViewToShow) {
-            iamViewToShow.classList.remove('hidden');
-        }
-
-        // Actualizar el estilo "activo" en la barra lateral
-        const sidebarLinks = document.querySelectorAll('#sidebar-nav a.main-nav-link');
-        sidebarLinks.forEach(link => {
-            link.classList.remove('bg-[#eb3496]');
-            link.classList.add('hover:bg-[#1a335a]');
-        });
-        const activeIamLink = document.querySelector('#sidebar-nav a[data-view="iam"]');
-        if (activeIamLink) {
-            activeIamLink.classList.add('bg-[#eb3496]');
-            activeIamLink.classList.remove('hover:bg-[#1a335a]');
-        }
-        // TERMINA LA CORRECCIÓN
+        activateDefaultViewPostScan();
     } catch (error) {
         const errorMsg = `Error: ${error.message || 'An unknown error occurred.'}`;
         console.error('Detailed Error:', error);
-        errorMessageDiv.textContent = errorMsg;
-        errorMessageDiv.classList.remove('hidden');
+        errorDiv.textContent = errorMsg;
+        errorDiv.classList.remove('hidden');
         log(`${errorMsg}`, 'error');
     } finally {
-        runAnalysisBtn.disabled = false;
-        loadingSpinner.classList.add('hidden');
-        buttonText.textContent = 'Scan Account';
+        runBtn.disabled = false;
+        spinner.classList.add('hidden');
+        btnText.textContent = 'Scan Account';
     }
 };
 
 
 const buildAndRenderAllViews = () => {
-    try {
-        log('Rendering all views…', 'info');
-        buildHealthyStatusView();
-        buildGeminiReportView();
-        buildIamView();
-        buildExposureView();
-        buildGuarddutyView();
-        buildWafView();
-        buildCloudtrailView();
-        buildCloudwatchView();
-        buildInspectorView();
-        buildAcmView();
-        buildComputeView();
-        buildEcrView();
-        buildDatabasesView();
-        buildNetworkPoliciesView();
-        buildConfigSHView();
-        buildCodePipelineView();
-        buildPlaygroundView();
-        buildKmsSecretsView();
-        buildConnectivityView();
-        log('Views rendered.', 'success');
-    } catch (e) { log(`Error rendering: ${e.message}`, 'error'); console.error(e); }
+    const safeRender = (name, fn) => {
+        try { fn(); } catch (e) { log(`Error rendering ${name}: ${e.message}`, 'error'); console.error(e); }
+    };
+
+    log('Rendering all views…', 'info');
+    safeRender('inventory', buildInventoryView);
+    safeRender('iam', buildIamView);
+    safeRender('exposure', buildExposureView);
+    safeRender('guardduty', buildGuarddutyView);
+    safeRender('waf', buildWafView);
+    safeRender('cloudtrail', buildCloudtrailView);
+    safeRender('cloudwatch', buildCloudwatchView);
+    safeRender('inspector', buildInspectorView);
+    safeRender('acm', buildAcmView);
+    safeRender('compute', buildComputeView);
+    safeRender('ecr', buildEcrView);
+    safeRender('databases', buildDatabasesView);
+    safeRender('network-policies', buildNetworkPoliciesView);
+    safeRender('config-sh', buildConfigSHView);
+    safeRender('codepipeline', buildCodePipelineView);
+    safeRender('auditor-notes', buildAuditorNotesView);
+    safeRender('playground', buildPlaygroundView);
+    safeRender('kms-secrets', buildKmsSecretsView);
+    safeRender('connectivity', buildConnectivityView);
+    log('Views rendered.', 'success');
+};
+
+const buildAuditorNotesView = () => {
+    const container = document.getElementById('auditor-notes-view');
+    if (!container) return;
+
+    const scopedEntries = Object.entries(window.scopedResources || {});
+    const notes = [...(window.auditorNotes || [])].sort((a, b) => {
+        const aDate = new Date(a.lastModified || a.timestamp || 0).getTime();
+        const bDate = new Date(b.lastModified || b.timestamp || 0).getTime();
+        return bDate - aDate;
+    });
+
+    const scopedRows = scopedEntries.length
+        ? scopedEntries.map(([arn, data]) => `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 text-xs text-gray-700 font-mono break-all">${arn}</td>
+                <td class="px-4 py-3 text-sm text-gray-700 break-words">${data?.comment || ''}</td>
+                <td class="px-4 py-3 text-sm text-right whitespace-nowrap">
+                    <button onclick="openScopeModal('${arn}', '${encodeURIComponent(data?.comment || '')}')" class="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 mr-2">Edit</button>
+                    <button onclick="removeResourceScope('${arn}')" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Remove</button>
+                </td>
+            </tr>
+        `).join('')
+        : `<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">No scoped resources yet.</td></tr>`;
+
+    const noteRows = notes.length
+        ? notes.map(note => `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 text-sm text-gray-700">${note.title || 'Untitled note'}</td>
+                <td class="px-4 py-3 text-xs text-gray-600 font-mono break-all">${note.arn || '-'}</td>
+                <td class="px-4 py-3 text-sm text-gray-600">${new Date(note.lastModified || note.timestamp).toLocaleString()}</td>
+                <td class="px-4 py-3 text-sm text-right whitespace-nowrap">
+                    <button onclick="showNoteDetails(${note.id})" class="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 mr-2">View</button>
+                    <button onclick="openNotesModal(${note.id})" class="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 mr-2">Edit</button>
+                    <button onclick="deleteAuditorNote(${note.id})" class="px-3 py-1.5 bg-red-100 text-red-700 rounded-md hover:bg-red-200">Delete</button>
+                </td>
+            </tr>
+        `).join('')
+        : `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">No notes available yet.</td></tr>`;
+
+    container.innerHTML = `
+        <header class="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-[#204071]">Auditor Notes</h2>
+                <p class="text-sm text-gray-500">Centralized workspace for scoped resources and audit notes.</p>
+            </div>
+            <button id="auditor-new-note-btn" class="bg-[#eb3496] text-white px-4 py-2 rounded-lg font-bold hover:bg-[#d42c86] transition">New Note</button>
+        </header>
+
+        <section class="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
+            <div class="px-5 py-4 border-b border-gray-100">
+                <h3 class="font-bold text-[#204071]">In-Scope Resources (${scopedEntries.length})</h3>
+                <p class="text-xs text-gray-500 mt-1">Each scoped resource requires a reason. You can edit it anytime.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource ARN</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-100">${scopedRows}</tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div class="px-5 py-4 border-b border-gray-100">
+                <h3 class="font-bold text-[#204071]">Written Notes (${notes.length})</h3>
+                <p class="text-xs text-gray-500 mt-1">Includes manual notes created by the auditor.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource ARN</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Update</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-100">${noteRows}</tbody>
+                </table>
+            </div>
+        </section>
+    `;
+
+    const addBtn = document.getElementById('auditor-new-note-btn');
+    if (addBtn) {
+        addBtn.addEventListener('click', () => openNotesModal());
+    }
 };
 
 const createInitialEmptyState = () => `<div class="text-center py-16 bg-white rounded-lg">
     <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="mx-auto h-12 w-12 text-gray-400" viewBox="0 0 16 16">
         <path d="M8 16c3.314 0 6-2 6-5.5 0-1.5-.5-4-2.5-6 .25 1.5-1.25 2-1.25 2C11 4 9 .5 6 0c.357 2 .5 4-2 6-1.25 1-2 2.729-2 4.5C2 14 4.686 16 8 16m0-1c-1.657 0-3-1-3-2.75 0-.75.25-2 1.25-3C6.125 10 7 10.5 7 10.5c-.375-1.25.5-3.25 2-3.5-.179 1-.25 2 1 3 .625.5 1 1.364 1 2.25C11 14 9.657 15 8 15"/>
     </svg>
-    <h3 class="mt-2 text-lg font-medium text-[#204071]">Welcome to AudiThor</h3>
-    <p class="mt-1 text-sm text-gray-500">Enter your credentials and click "Scan Account"</p>
+    <h3 class="mt-2 text-lg font-medium text-[#204071]">Scan required</h3>
+    <p class="mt-1 text-sm text-gray-500">Complete an account scan to unlock this view.</p>
 </div>`;
 
 
@@ -650,6 +786,7 @@ const exportResultsToJson = () => {
             },
             connectivity: window.connectivityApiData?.results || null,
             codepipeline: window.codepipelineApiData?.results || null,
+            inventory: window.inventoryApiData?.results || null,
             // MODIFICACIÓN: Incluir datos completos de TrailAlerts
             trailAlerts: window.trailAlertsData || null,
             audiThorScopeData: window.scopedResources,
@@ -720,6 +857,7 @@ const handleJsonImport = (event) => {
             window.secretsManagerApiData = results.secretsManager ? { metadata: metadata, results: results.secretsManager } : null;
             window.connectivityApiData = results.connectivity ? { metadata: metadata, results: results.connectivity } : null;
             window.codepipelineApiData = results.codepipeline ? { metadata: metadata, results: results.codepipeline } : null;
+            window.inventoryApiData = results.inventory ? { metadata: metadata, results: results.inventory } : null;
             
 
 
@@ -772,34 +910,15 @@ const handleJsonImport = (event) => {
             buildAndRenderAllViews();
             
             // 2. Ejecutar lógicas adicionales que puedan ser necesarias
-            runAndDisplayHealthyStatus();
 
             // 3. ELIMINADO: Ya no necesitamos llamar buildCloudtrailView() por segunda vez
             // porque ya se ejecuta en buildAndRenderAllViews() y manejará los datos importados
 
             // 4. Asegurarse de que se muestra la vista correcta
             log('Activating the Identity & Access view post-import...', 'info');
-
-            // Ocultar todas las vistas
-            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
-            
-            // Mostrar la vista de IAM
-            const iamViewToShow = document.getElementById('iam-view');
-            if (iamViewToShow) {
-                iamViewToShow.classList.remove('hidden');
-            }
-
-            // Actualizar el estilo "activo" en la barra lateral para que sea coherente
-            const sidebarLinks = document.querySelectorAll('#sidebar-nav a.main-nav-link');
-            sidebarLinks.forEach(link => {
-                link.classList.remove('bg-[#eb3496]');
-                link.classList.add('hover:bg-[#1a335a]');
-            });
-            const activeIamLink = document.querySelector('#sidebar-nav a[data-view="iam"]');
-            if (activeIamLink) {
-                activeIamLink.classList.add('bg-[#eb3496]');
-                activeIamLink.classList.remove('hover:bg-[#1a335a]');
-            }
+            hasCompletedInitialScan = true;
+            setWorkspaceVisibility(true);
+            activateDefaultViewPostScan();
 
         } catch (error) {
             log(`Error importing the JSON file: ${error.message}`, 'error');
@@ -820,87 +939,6 @@ const handleJsonImport = (event) => {
 };
 
 
-
-const displayHealthyStatus = (selectedRegion) => {
-    // Placeholder - necesitarías implementar esta función
-    log('Displaying healthy status...', 'info');
-};
-
-const runAndDisplayHealthyStatus = async () => {
-    if (!window.iamApiData) {
-        log('No audit data available for healthy status analysis.', 'info');
-        return;
-    }
-
-    log('Running healthy status analysis...', 'info');
-    
-    try {
-        // Prepare audit data structure
-        const auditData = {
-            iam: window.iamApiData,
-            federation: window.federationApiData,
-            accessAnalyzer: window.accessAnalyzerApiData,
-            securityhub: window.securityHubApiData,
-            exposure: window.exposureApiData,
-            guardduty: window.guarddutyApiData,
-            waf: window.wafApiData,
-            cloudtrail: window.cloudtrailApiData,
-            cloudwatch: window.cloudwatchApiData,
-            inspector: window.inspectorApiData,
-            acm: window.acmApiData,
-            compute: window.computeApiData,
-            ecr: window.ecrApiData,
-            databases: window.databasesApiData,
-            networkPolicies: window.networkPoliciesApiData,
-            configSH: window.configSHApiData,
-            configSHStatus: window.configSHStatusApiData,
-            config_sh: window.configSHStatusApiData,
-            kms: window.kmsApiData,
-            secretsManager: window.secretsManagerApiData,
-            connectivity: window.connectivityApiData,
-            codepipeline: window.codepipelineApiData
-        };
-
-        // Call the backend API to check rules
-        const response = await fetch('http://127.0.0.1:5001/api/check-healthy-status-rules', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(auditData)
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const findings = await response.json();
-        
-        // Store findings globally
-        window.lastHealthyStatusFindings = findings;
-        
-        log(`Healthy status analysis completed. Found ${findings.length} findings.`, 'success');
-        
-        // Import the functions dynamically to avoid circular imports
-        const { renderHealthyStatusFindings, populateHealthyStatusFilter } = await import('/static/js/views/17_healthy_status.js');
-        
-        // Render the findings
-        renderHealthyStatusFindings(findings);
-        populateHealthyStatusFilter(findings);
-        
-        // Also populate the Gemini region filter
-        populateGeminiRegionFilter(findings);
-        
-    } catch (error) {
-        log(`Error in healthy status analysis: ${error.message}`, 'error');
-        console.error('Healthy status error:', error);
-    }
-};
-
-const populateHealthyStatusFilter = () => {
-    // Placeholder - necesitarías implementar esta función
-    log('Populating healthy status filters...', 'info');
-};
 
 const populateGeminiRegionFilter = (findings) => {
     const select = document.getElementById('gemini-region-filter');
@@ -983,7 +1021,7 @@ const deleteAuditorNote = (noteId) => {
         if (noteIndex > -1) {
             window.auditorNotes.splice(noteIndex, 1);
             saveAuditorNotes();
-            buildAuditorNotesView();
+            rerenderCurrentView();
             log(`Nota con ID ${noteId} eliminada.`, 'success');
             
             // Cerramos el modal de detalles si está abierto
@@ -1000,6 +1038,17 @@ const deleteAuditorNote = (noteId) => {
 
 // 5. PUNTO DE ENTRADA
 document.addEventListener('DOMContentLoaded', () => {
+    landingView = document.getElementById('landing-view');
+    mainAppView = document.getElementById('main-app-view');
+    landingRunAnalysisBtn = document.getElementById('landing-run-analysis-button');
+    landingImportResultsBtn = document.getElementById('landing-import-results-button');
+    landingAccessKeyInput = document.getElementById('landing-access-key-input');
+    landingSecretKeyInput = document.getElementById('landing-secret-key-input');
+    landingSessionTokenInput = document.getElementById('landing-session-token-input');
+    landingLoadingSpinner = document.getElementById('landing-loading-spinner');
+    landingButtonText = document.getElementById('landing-button-text');
+    landingErrorMessageDiv = document.getElementById('landing-error-message');
+
     // Inicializar selectores
     views = document.querySelectorAll('.view');
     mainNavLinks = document.querySelectorAll('.main-nav-link');
@@ -1026,53 +1075,22 @@ document.addEventListener('DOMContentLoaded', () => {
         sidebarNav.addEventListener('click', handleMainNavClick);
     }
 
-
-const showNotesMenu = () => {
-    // Crear menú desplegable
-    const existingMenu = document.getElementById('notes-menu');
-    if (existingMenu) existingMenu.remove();
-    
-    const menu = document.createElement('div');
-    menu.id = 'notes-menu';
-    menu.className = 'fixed bottom-20 right-4 bg-white border border-gray-200 rounded-lg shadow-lg z-50';
-    menu.innerHTML = `
-        <div class="p-2">
-            <button onclick="openNotesModal()" class="w-full text-left px-3 py-2 hover:bg-gray-100 rounded flex items-center">
-                Write Note
-            </button>
-            <button onclick="activateElementSelector()" class="w-full text-left px-3 py-2 hover:bg-gray-100 rounded flex items-center">
-                Capture Evidence
-            </button>
-        </div>
-    `;
-    
-    document.body.appendChild(menu);
-    
-    // Cerrar menú al hacer click fuera
-    setTimeout(() => {
-        document.addEventListener('click', closeMenu, true);
-    }, 100);
-    
-    function closeMenu() {
-        menu.remove();
-        document.removeEventListener('click', closeMenu, true);
-    }
-};
-
-
     // Configurar botón de notas
 const openNotesButton = document.getElementById('open-notes-btn');
 if (openNotesButton) {
     openNotesButton.addEventListener('click', () => {
-        // Mostrar menú con opciones
-        showNotesMenu();
+        openNotesModal();
     });
 }
 
 
     // Configurar botón de análisis
     if (runAnalysisBtn) {
-        runAnalysisBtn.addEventListener('click', runAnalysisFromInputs);
+        runAnalysisBtn.addEventListener('click', () => runAnalysisFromInputs('main'));
+    }
+
+    if (landingRunAnalysisBtn) {
+        landingRunAnalysisBtn.addEventListener('click', () => runAnalysisFromInputs('landing'));
     }
 
     // Configurar botones de importación/exportación
@@ -1087,6 +1105,10 @@ if (openNotesButton) {
     if (importBtn && fileInput) {
         importBtn.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', handleJsonImport);
+    }
+
+    if (landingImportResultsBtn && fileInput) {
+        landingImportResultsBtn.addEventListener('click', () => fileInput.click());
     }
 
     // Configurar controles del log
@@ -1156,12 +1178,7 @@ if (openNotesButton) {
         }
     });
 
-    // Mostrar vista inicial (iam)
-    const initialView = document.getElementById('iam-view');
-    if (initialView) {
-        initialView.classList.remove('hidden');
-        buildIamView();
-    }
+    setWorkspaceVisibility(false);
     minimizeLogPanel();
     
     log('Application initialized successfully.', 'success');
@@ -1429,6 +1446,7 @@ window.openModalWithUserGroups = openModalWithUserGroups;
 window.openModalWithEc2Tags = openModalWithEc2Tags;
 window.openModalWithLambdaTags = openModalWithLambdaTags;
 window.openModalWithTlsDetails = openModalWithTlsDetails;
+window.openModalWithResourceMap = openModalWithResourceMap;
 window.toggleAlarmDetails = toggleAlarmDetails;
 window.showCloudtrailEventDetails = showCloudtrailEventDetails;
 window.openModalWithKmsPolicy = openModalWithKmsPolicy;
@@ -1443,6 +1461,4 @@ window.removeResourceScope = removeResourceScope;
 window.openNotesModal = openNotesModal;
 window.showNoteDetails = showNoteDetails;
 window.deleteAuditorNote = deleteAuditorNote;
-window.activateElementSelector = activateElementSelector;
-window.showNotesMenu = showNotesMenu;
 window.openModalWithVpcTags = openModalWithVpcTags;

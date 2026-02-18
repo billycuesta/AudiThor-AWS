@@ -1,6 +1,23 @@
+html {
+    font-size: 14px;
+}
+
 body { 
-    font-family: 'Inter', sans-serif; 
+    font-family: Consolas, 'SFMono-Regular', Menlo, Monaco, 'Liberation Mono', 'Courier New', monospace;
     background-color: #f1f5f9; 
+}
+
+.audithor-ascii-logo {
+    font-family: 'Hack Nerd Font Mono', 'Hack Nerd Font', Hack, Consolas, 'SFMono-Regular', Menlo, Monaco, 'Liberation Mono', 'Courier New', monospace;
+    color: transparent;
+    background: linear-gradient(180deg, #f08a74 0%, #eb3496 48%, #8ab4ea 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+button[title^="Marcado:"] .bi-bookmark-star {
+    color: #dc2626 !important;
 }
 
 ::-webkit-scrollbar { 

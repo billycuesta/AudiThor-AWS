@@ -670,7 +670,7 @@ const runCloudtrailLookupAnalysis = async () => {
     };
 
     try {
-        const response = await fetch('http://127.0.0.1:5001/api/run-cloudtrail-lookup', {
+        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-cloudtrail-lookup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -696,11 +696,74 @@ const runCloudtrailLookupAnalysis = async () => {
     }
 };        
 
+/**
+ * exportLookupResultsToJson
+ * Exporta los resultados de la última búsqueda en Log Finder a un fichero JSON.
+ */
+const exportLookupResultsToJson = () => {
+    // 1. Verifica si hay resultados para exportar
+    if (!window.lastCloudtrailLookupResults || window.lastCloudtrailLookupResults.length === 0) {
+        alert("No hay resultados en la tabla para exportar.");
+        log('Exportación fallida: No hay resultados de búsqueda disponibles.', 'warning');
+        return;
+    }
+
+    try {
+        log('Preparando resultados para la exportación JSON...', 'info');
+
+        // 2. Extrae y convierte el evento en crudo de cada resultado
+        const rawEvents = window.lastCloudtrailLookupResults.map(event => {
+            try {
+                // El log en crudo está en formato string, lo parseamos para que sea un objeto JSON
+                return JSON.parse(event.CloudTrailEvent);
+            } catch (e) {
+                console.error('Error al parsear CloudTrailEvent:', event.CloudTrailEvent);
+                return { error: 'No se pudo parsear el evento', eventId_original: event.EventId };
+            }
+        });
+
+        // 3. Convierte el array de logs a un string JSON formateado
+        const jsonString = JSON.stringify(rawEvents, null, 2);
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        // 4. Crea un enlace temporal y simula un clic para descargar el fichero
+        const a = document.createElement('a');
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        a.href = url;
+        a.download = `cloudtrail_log_finder_export_${timestamp}.json`; // Nombre del fichero
+        document.body.appendChild(a);
+        a.click();
+        
+        // 5. Limpia los elementos creados
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        log(`Se exportaron ${rawEvents.length} eventos a JSON correctamente.`, 'success');
+    } catch (error) {
+        log(`Error exportando a JSON: ${error.message}`, 'error');
+        console.error(error);
+        alert("Ocurrió un error durante la exportación. Revisa la consola para más detalles.");
+    }
+};
+
+
 const renderCloudtrailLookupResult = (events) => {
     if (!events) return '';
     if (events.length === 0) {
         return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No events matching the search criteria were found.</p></div>';
     }
+    const exportButtonHtml = `
+        <div class="flex justify-end mb-4">
+            <button id="export-lookup-btn" class="bg-[#eb3496] text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-[#d42c86] transition flex items-center space-x-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                    <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+                </svg>
+                <span>Exportar Logs (JSON)</span>
+            </button>
+        </div>
+    `;
     
     let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table id="cloudtrail-lookup-table" class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
                 '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>' +
@@ -723,7 +786,18 @@ const renderCloudtrailLookupResult = (events) => {
     table += '</tbody></table></div>';
 
     const detailContainer = '<div id="ct-event-detail-container" class="mt-6"></div>';
-    return table + detailContainer;
+    
+    // Conectar el botón a la función de exportar
+    // Usamos un pequeño delay para asegurar que el botón ya está en el DOM
+    setTimeout(() => {
+        const exportBtn = document.getElementById('export-lookup-btn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', exportLookupResultsToJson);
+        }
+    }, 0);
+
+    // Devolver el HTML del botón junto con la tabla
+    return exportButtonHtml + table + detailContainer;
 };
     
 export const showCloudtrailEventDetails = (eventId) => {
@@ -875,7 +949,8 @@ const initializeTrailAlertsEventListeners = () => {
 
 const loadRulesStatus = async () => {
     try {
-        const response = await fetch('http://127.0.0.1:5001/api/get-sigma-rules-status');
+        const sigmaStatusEndpoint = window.CONSTANTS?.API?.SIGMA_RULES_STATUS || `${window.location.origin}/api/get-sigma-rules-status`;
+        const response = await fetch(sigmaStatusEndpoint);
         const data = await response.json();
         
         window.rulesStatus = data;
@@ -944,7 +1019,8 @@ const updateSigmaRules = async () => {
     try {
         log('Downloading Sigma rules from TrailAlerts repository...', 'info');
         
-        const response = await fetch('http://127.0.0.1:5001/api/update-sigma-rules', {
+        const sigmaUpdateEndpoint = window.CONSTANTS?.API?.SIGMA_RULES_UPDATE || `${window.location.origin}/api/update-sigma-rules`;
+        const response = await fetch(sigmaUpdateEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
@@ -1056,7 +1132,8 @@ const runTrailAlertsAnalysis = async () => {
             payload.events = allEvents;
         }
         
-        const response = await fetch('http://127.0.0.1:5001/api/run-trailalerts-analysis', {
+        const trailalertsEndpoint = window.CONSTANTS?.API?.RUN_TRAILALERTS || `${window.location.origin}/api/run-trailalerts-analysis`;
+        const response = await fetch(trailalertsEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -1368,6 +1445,9 @@ window.showTrailAlertEventDetails = (alertIndex) => {
     detailContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 };
 
+
+
+// Mantener la función de cerrar igual
 window.closeTrailAlertDetails = () => {
     const detailContainer = document.getElementById('trailalerts-event-detail-container');
     if (detailContainer) {

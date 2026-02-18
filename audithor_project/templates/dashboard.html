@@ -12,14 +12,65 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body class="text-[#204071]">
-    <div id="main-app-view" class="h-screen">
+    <div id="landing-view" class="min-h-screen bg-gradient-to-br from-[#204071] via-[#1a335a] to-[#10203b] flex items-center justify-center p-6">
+        <div class="w-full max-w-4xl p-6 md:p-10">
+            <div class="px-2 py-2 overflow-hidden h-[140px] flex items-center justify-center">
+                <div class="origin-center scale-[0.4] md:scale-[0.55]">
+                    <pre class="audithor-ascii-logo text-[24px] leading-[1.02] font-mono whitespace-pre">  █████╗ ██╗   ██╗██████╗ ██╗████████╗██╗  ██╗ ██████╗ ██████╗
+ ██╔══██╗██║   ██║██╔══██╗██║╚══██╔══╝██║  ██║██╔═══██╗██╔══██╗
+ ███████║██║   ██║██║  ██║██║   ██║   ███████║██║   ██║██████╔╝
+ ██╔══██║██║   ██║██║  ██║██║   ██║   ██╔══██║██║   ██║██╔══██╗
+ ██║  ██║╚██████╔╝██████╔╝██║   ██║   ██║  ██║╚██████╔╝██║  ██║
+ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝</pre>
+                </div>
+            </div>
+            <p class="text-slate-200/95 text-xs md:text-sm text-center mt-2 max-w-3xl mx-auto">AWS Security Audit powered by automation to detect risk faster and prioritize remediation.</p>
+            <h1 class="text-white text-xl md:text-2xl font-bold mt-12">Start New Scan</h1>
+            <p class="text-slate-200 text-sm md:text-base mt-3">Enter AWS credentials to start the audit. Dashboard views become available once scan completes.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                <div>
+                    <label for="landing-access-key-input" class="block text-sm font-medium text-slate-100 mb-1">AWS Access Key ID</label>
+                    <input type="text" id="landing-access-key-input" class="bg-white/90 border border-white/40 text-[#204071] text-sm rounded-lg focus:ring-[#eb3496] focus:border-[#eb3496] block w-full p-2.5" placeholder="AKIA...">
+                </div>
+                <div>
+                    <label for="landing-secret-key-input" class="block text-sm font-medium text-slate-100 mb-1">AWS Secret Access Key</label>
+                    <input type="password" id="landing-secret-key-input" class="bg-white/90 border border-white/40 text-[#204071] text-sm rounded-lg focus:ring-[#eb3496] focus:border-[#eb3496] block w-full p-2.5" placeholder="••••••••••••••••">
+                </div>
+                <div>
+                    <label for="landing-session-token-input" class="block text-sm font-medium text-slate-100 mb-1">AWS Session Token (Optional)</label>
+                    <input type="password" id="landing-session-token-input" class="bg-white/90 border border-white/40 text-[#204071] text-sm rounded-lg focus:ring-[#eb3496] focus:border-[#eb3496] block w-full p-2.5" placeholder="Session token (if needed)">
+                </div>
+            </div>
+
+            <div class="mt-10 flex flex-wrap items-center justify-center gap-3">
+                <button id="landing-run-analysis-button" class="bg-[#eb3496] text-white px-6 py-3 rounded-lg font-bold text-md hover:bg-[#d42c86] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
+                    <span id="landing-button-text">Scan Account</span>
+                    <div id="landing-loading-spinner" class="spinner hidden"></div>
+                </button>
+                <button id="landing-import-results-button" class="bg-[#204071] text-white px-6 py-3 rounded-lg font-bold text-md hover:bg-[#1a335a] transition flex items-center justify-center space-x-2" title="Import results from JSON">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-upload w-4 h-4" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708z"/></svg>
+                    <span>Import JSON</span>
+                </button>
+            </div>
+            <div id="landing-error-message" class="text-red-200 text-sm mt-3 font-medium hidden"></div>
+        </div>
+    </div>
+
+    <div id="main-app-view" class="h-screen hidden">
         <div class="flex h-full">
-            <aside class="w-64 bg-[#204071] text-white flex flex-col fixed h-full">
-                <div class="flex items-center justify-center p-4 border-b border-[#1a335a] space-x-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="h-10 w-10 text-[#eb3496]" viewBox="0 0 16 16">
-                        <path d="M5.52.359A.5.5 0 0 1 6 0h4a.5.5 0 0 1 .474.658L8.694 6H12.5a.5.5 0 0 1 .395.807l-7 9a.5.5 0 0 1-.873-.454L6.823 9.5H3.5a.5.5 0 0 1-.48-.641zM6.374 1 4.168 8.5H7.5a.5.5 0 0 1 .478.647L6.78 13.04 11.478 7H8a.5.5 0 0 1-.474-.658L9.306 1z"/>
-                    </svg>
-                    <h1 class="text-2xl font-bold text-white">AudiThor</h1>
+            <aside class="w-72 bg-[#204071] text-white flex flex-col fixed h-full">
+                <div class="p-4 border-b border-[#1a335a]">
+                    <div class="px-2 py-2 overflow-hidden h-[84px] flex items-center justify-center">
+                        <div class="origin-center scale-[0.24]">
+                            <pre class="audithor-ascii-logo text-[24px] leading-[1.02] font-mono whitespace-pre">  █████╗ ██╗   ██╗██████╗ ██╗████████╗██╗  ██╗ ██████╗ ██████╗
+ ██╔══██╗██║   ██║██╔══██╗██║╚══██╔══╝██║  ██║██╔═══██╗██╔══██╗
+ ███████║██║   ██║██║  ██║██║   ██║   ███████║██║   ██║██████╔╝
+ ██╔══██║██║   ██║██║  ██║██║   ██║   ██╔══██║██║   ██║██╔══██╗
+ ██║  ██║╚██████╔╝██████╔╝██║   ██║   ██║  ██║╚██████╔╝██║  ██║
+ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝</pre>
+                        </div>
+                    </div>
                 </div>
                 <nav id="sidebar-nav" class="flex-1 mt-4 px-2 space-y-4 overflow-y-auto">
                     <div><a href="#" data-view="iam" class="main-nav-link flex items-center px-4 py-2.5 rounded-md bg-[#eb3496]"><span>Identity & Access</span></a></div>
@@ -28,22 +79,23 @@
                     <div><a href="#" data-view="waf" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>WAF</span></a></div>
                     <div><a href="#" data-view="cloudtrail" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>CloudTrail</span></a></div>
                     <div><a href="#" data-view="cloudwatch" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>Cloudwatch & SNS</span></a></div>
+                    <div><a href="#" data-view="inventory" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>Inventory</span></a></div>
                     <div><a href="#" data-view="inspector" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>Inspector</span></a></div>
                     <div><a href="#" data-view="acm" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>ACM</span></a></div>
                     <div><a href="#" data-view="compute" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>Compute</span></a></div>
                     <div><a href="#" data-view="ecr" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>ECR</span></a></div>
                     <div><a href="#" data-view="databases" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>Databases</span></a></div>
-                    <div><a href="#" data-view="kms" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>KMS & Secrets</span></a></div>
+                    <div><a href="#" data-view="kms-secrets" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>KMS & Secrets</span></a></div>
                     <div><a href="#" data-view="network-policies" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>Network Policies</span></a></div>
                     <div><a href="#" data-view="connectivity" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>Network Connectivity</span></a></div>
                     <div><a href="#" data-view="config-sh" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>Config & SecurityHub</span></a></div>
                     <div><a href="#" data-view="codepipeline" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>CodePipeline</span></a></div>
+                    <div><a href="#" data-view="auditor-notes" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>Auditor Notes</span></a></div>
                     <div><a href="#" data-view="playground" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>Playground</span></a></div>
-                    <div><a href="#" data-view="healthy-status" class="main-nav-link flex items-center px-4 py-2.5 rounded-md hover:bg-[#1a335a]"><span>Healthy Status</span></a></div>
                 </nav>
             </aside>
 
-            <div id="view-container" class="flex-1 ml-64 p-6 lg:p-8 bg-gray-50">
+            <div id="view-container" class="flex-1 ml-72 p-6 lg:p-8 bg-gray-50">
                 <div class="bg-white/80 backdrop-blur-sm border border-gray-200 p-4 rounded-xl shadow-md mb-6 sticky top-6 z-10">
                     <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
                         <div><label for="access-key-input" class="block text-sm font-medium text-[#204071] mb-1">AWS Access Key ID</label><input type="text" id="access-key-input" class="bg-gray-50 border border-gray-300 text-[#204071] text-sm rounded-lg focus:ring-[#eb3496] focus:border-[#eb3496] block w-full p-2.5" placeholder="AKIA..."></div>
@@ -54,23 +106,24 @@
                     <div id="error-message" class="text-red-600 text-sm mt-2 font-medium hidden"></div>
                 </div>
 
-                <main id="healthy-status-view" class="view"></main>
-                <main id="iam-view" class="view hidden"></main>
+                <main id="iam-view" class="view"></main>
                 <main id="exposure-view" class="view hidden"></main>
                 <main id="guardduty-view" class="view hidden"></main>
                 <main id="waf-view" class="view hidden"></main>
                 <main id="cloudtrail-view" class="view hidden"></main>
                 <main id="cloudwatch-view" class="view hidden"></main>
+                <main id="inventory-view" class="view hidden"></main>
                 <main id="inspector-view" class="view hidden"></main>
                 <main id="acm-view" class="view hidden"></main>
                 <main id="compute-view" class="view hidden"></main>
                 <main id="ecr-view" class="view hidden"></main>
                 <main id="databases-view" class="view hidden"></main>
-                <main id="kms-view" class="view hidden"></main>
+                <main id="kms-secrets-view" class="view hidden"></main>
                 <main id="network-policies-view" class="view hidden"></main>
                 <main id="connectivity-view" class="view hidden"></main>
                 <main id="config-sh-view" class="view hidden"></main>
                 <main id="codepipeline-view" class="view hidden"></main>
+                <main id="auditor-notes-view" class="view hidden"></main>
                 <main id="playground-view" class="view hidden"></main>
             </div>
         </div>

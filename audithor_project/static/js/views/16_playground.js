@@ -279,7 +279,7 @@ const runPlaygroundAnalysis = async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-        const response = await fetch('http://127.0.0.1:5001/api/run-playground-audit', {
+        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-playground-audit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -326,19 +326,13 @@ const renderPlaygroundResults = () => {
                 </h4>
             </div>
         `;
+        // Mostrar las tablas de resumen del path solo si es alcanzable
         if(tables && tables.length > 0) {
             tables.forEach(table => {
                 resultHtml += `<pre class="bg-[#204071] text-white p-4 rounded-lg text-xs font-mono overflow-x-auto mt-4">${table}</pre>`;
             });
         }
         
-        if (detail_tables && Object.keys(detail_tables).length > 0) {
-            resultHtml += '<h3 class="text-xl font-bold text-[#204071] mt-8 mb-4 border-b pb-2">Details of Involved Resources</h3>';
-            for (const resourceId in detail_tables) {
-                resultHtml += `<div class="mt-4"><pre class="bg-gray-800 text-gray-200 p-4 rounded-lg text-xs font-mono overflow-x-auto">${detail_tables[resourceId]}</pre></div>`;
-            }
-        }
-
     } else { // UNREACHABLE
         resultHtml = `
             <div class="bg-red-50 text-red-800 p-4 rounded-lg">
@@ -350,6 +344,20 @@ const renderPlaygroundResults = () => {
             </div>
         `;
     }
+
+    // --- CAMBIO PRINCIPAL ---
+    // Este bloque ahora se ejecuta para AMBOS casos: REACHABLE y UNREACHABLE
+    if (detail_tables && Object.keys(detail_tables).length > 0) {
+        resultHtml += '<h3 class="text-xl font-bold text-[#204071] mt-8 mb-4 border-b pb-2">Details of Involved Resources</h3>';
+        for (const resourceId in detail_tables) {
+            // Añadimos un pequeño encabezado para cada recurso para mayor claridad
+            resultHtml += `<div class="mt-4">
+                <p class="text-sm font-semibold text-gray-600 mb-1">Resource: <span class="font-mono text-gray-800">${resourceId}</span></p>
+                <pre class="bg-gray-800 text-gray-200 p-4 rounded-lg text-xs font-mono overflow-x-auto">${detail_tables[resourceId]}</pre>
+            </div>`;
+        }
+    }
+
     container.innerHTML = resultHtml;
 };
 
@@ -404,7 +412,7 @@ const runSslScan = async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
 
-        const response = await fetch('http://127.0.0.1:5001/api/run-sslscan', {
+        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-sslscan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ target: target }),
@@ -489,7 +497,7 @@ const runSimulation = async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
-        const response = await fetch('http://127.0.0.1:5001/api/run-simulate-policy', {
+        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-simulate-policy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -624,7 +632,7 @@ const runLambdaSimulation = async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
-        const response = await fetch('http://127.0.0.1:5001/api/run-simulate-lambda-policy', {
+        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-simulate-lambda-policy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),

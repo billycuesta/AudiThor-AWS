@@ -1854,10 +1854,10 @@ RULES_TO_CHECK = [
     {
         "rule_id": "WAF_003",
         "section": "Security Services",
-        "name": "Uso de AWS WAF Classic (v1) detectado",
+        "name": "AWS WAF Classic (v1) usage detected",
         "severity": SEVERITY["LOW"],
-        "description": "Se ha detectado el uso de AWS WAF Classic (v1). AWS recomienda migrar a la última versión, AWS WAF (v2), ya que ofrece un motor de reglas más potente y flexible, mejores conjuntos de reglas gestionadas por proveedores, menor latencia, precios más eficientes y una mejor integración con servicios como API Gateway, Cognito y AppSync.",
-        "remediation": "Planifica la migración de tus Web ACLs de WAF Classic a WAFv2. Puedes usar el asistente de migración en la consola de AWS o AWS Firewall Manager. El proceso general implica: 1. Crear una nueva Web ACL en WAFv2. 2. Replicar y mejorar las reglas existentes. 3. Probar la nueva ACL en un entorno de no producción. 4. Asociar la nueva ACL a tus recursos (CloudFront, ALB, etc.) y desasociar la antigua ACL de WAF Classic.",
+        "description": "Usage of AWS WAF Classic (v1) has been detected. AWS recommends migrating to the latest version, AWS WAF (v2), as it offers a more powerful and flexible rules engine, better provider-managed rule sets, lower latency, more efficient pricing, and better integration with services like API Gateway, Cognito, and AppSync.",
+        "remediation": "Plan the migration of your WAF Classic Web ACLs to WAFv2. You can use the migration wizard in the AWS console or AWS Firewall Manager. The general process involves: 1. Creating a new Web ACL in WAFv2. 2. Replicating and improving the existing rules. 3. Testing the new ACL in a non-production environment. 4. Associating the new ACL with your resources (CloudFront, ALB, etc.) and disassociating the old WAF Classic ACL.",
         "pci_requirement": "PCI DSS 6.4.2",
         "check_function": check_waf_classic_in_use
     },
