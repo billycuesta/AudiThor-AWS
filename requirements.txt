@@ -12,9 +12,11 @@ markdown-it-py==3.0.0
 MarkupSafe==3.0.2
 mdurl==0.1.2
 Pygments==2.19.2
+PyYAML==6.0.2
 python-dateutil==2.9.0.post0
 pytz==2025.2
 rich==14.1.0
+requests==2.32.3
 s3transfer==0.13.1
 six==1.17.0
 sslscan==0.5.1
