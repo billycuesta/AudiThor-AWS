@@ -527,6 +527,36 @@ const runAnalysisFromInputs = async (source = 'main') => {
             codepipeline: fetch('http://127.0.0.1:5001/api/run-codepipeline-audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
             inventory: fetch('http://127.0.0.1:5001/api/run-inventory-audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         };
+
+        const totalTests = Object.keys(apiCalls).length;
+        let completedTests = 0;
+        log(`Progress: 0% (0/${totalTests})`, 'info');
+
+        const getProgressPercent = () => Math.round((completedTests / totalTests) * 100);
+        const testLabels = {
+            iam: 'Identity & Access',
+            accessAnalyzer: 'Access Analyzer',
+            securityhub: 'Security Hub',
+            exposure: 'Internet Exposure',
+            guardduty: 'GuardDuty',
+            waf: 'WAF',
+            cloudtrail: 'CloudTrail',
+            cloudwatch: 'CloudWatch',
+            inspector: 'Inspector',
+            acm: 'Certificate Manager',
+            compute: 'Compute',
+            ecr: 'Elastic Container Registry',
+            databases: 'Databases',
+            network_policies: 'Network Policies',
+            federation: 'Federation',
+            config_sh_status: 'Config & Security Hub Status',
+            kms: 'KMS',
+            secrets_manager: 'Secrets Manager',
+            connectivity: 'Connectivity',
+            codepipeline: 'CodePipeline',
+            inventory: 'Inventory'
+        };
+        const formatTestLabel = (key) => testLabels[key] || key.replace(/_/g, ' ');
         
         const promises = Object.entries(apiCalls).map(async ([key, promise]) => {
             try { 
@@ -535,9 +565,13 @@ const runAnalysisFromInputs = async (source = 'main') => {
                     const errorData = await response.json(); 
                     throw new Error(errorData.error || `HTTP error! status: ${response.status}`); 
                 } 
+                completedTests += 1;
+                log(`Progress: ${getProgressPercent()}% (${completedTests}/${totalTests}) - ${formatTestLabel(key)} done`, 'info');
                 return [key, await response.json()]; 
             } catch (error) { 
                 log(`Error for API '${key}': ${error.message}`, 'error'); 
+                completedTests += 1;
+                log(`Progress: ${getProgressPercent()}% (${completedTests}/${totalTests}) - ${formatTestLabel(key)} failed`, 'warning');
                 return [key, null]; 
             }
         });
