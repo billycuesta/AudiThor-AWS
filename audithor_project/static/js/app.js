@@ -78,7 +78,6 @@ window.configSHStatusApiData = null;
 window.kmsApiData = null;
 window.allAvailableRegions = [];
 window.lastCloudtrailLookupResults = [];
-window.trailAlertsData = null;
 window.scopedResources = {};
 window.auditorNotes = [];
 
@@ -821,8 +820,6 @@ const exportResultsToJson = () => {
             connectivity: window.connectivityApiData?.results || null,
             codepipeline: window.codepipelineApiData?.results || null,
             inventory: window.inventoryApiData?.results || null,
-            // MODIFICACIÓN: Incluir datos completos de TrailAlerts
-            trailAlerts: window.trailAlertsData || null,
             audiThorScopeData: window.scopedResources,
             audiThorAuditorNotes: window.auditorNotes || []
         }
@@ -903,15 +900,6 @@ const handleJsonImport = (event) => {
                 sslscan: playgroundImportData.sslscan || null
             };
             
-            // Importar datos completos de TrailAlerts
-            window.trailAlertsData = results.trailAlerts || null;
-            
-            // Log sobre TrailAlerts solo una vez aquí
-            if (window.trailAlertsData) {
-                const alertsCount = window.trailAlertsData.results?.alerts?.length || 0;
-                log(`Imported TrailAlerts data with ${alertsCount} security alerts`, 'success');
-            }
-
             window.allAvailableRegions = window.networkPoliciesApiData?.results?.all_regions || [];
 
             log('Data imported into the application state.', 'success');
@@ -940,7 +928,6 @@ const handleJsonImport = (event) => {
 
 
             // 1. Construir el contenido de todas las vistas en segundo plano
-            // NOTA: buildCloudtrailView() ya se ejecuta aquí y manejará los datos de TrailAlerts automáticamente
             buildAndRenderAllViews();
             
             // 2. Ejecutar lógicas adicionales que puedan ser necesarias

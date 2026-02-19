@@ -67,17 +67,6 @@ const API = {
   RUN_SECRETS_MANAGER:     `${BASE}/api/run-secrets-manager-audit`,
   RUN_CONNECTIVITY:        `${BASE}/api/run-connectivity-audit`,
   RUN_CODEPIPELINE:        `${BASE}/api/run-codepipeline-audit`,
-
-  // ✅ Sigma rules (TrailAlerts)
-  SIGMA_RULES_STATUS:      `${BASE}/api/get-sigma-rules-status`,
-  SIGMA_RULES_UPDATE:      `${BASE}/api/update-sigma-rules`,
-  RUN_TRAILALERTS:         `${BASE}/api/run-trailalerts-analysis`,
-};
-
-// Opcional: agrupamos Sigma
-API.SIGMA = {
-  STATUS: API.SIGMA_RULES_STATUS,
-  UPDATE: API.SIGMA_RULES_UPDATE,
 };
 
 // =====================================================
