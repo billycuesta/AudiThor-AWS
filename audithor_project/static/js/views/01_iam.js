@@ -382,7 +382,8 @@ export const openModalWithUserRoles = async (username, userIndex) => {
     };
 
     try {
-        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/get-user-assumable-roles', {
+        const assumableRolesEndpoint = window.API?.GET_USER_ASSUMABLE_ROLES || '/api/get-user-assumable-roles';
+        const response = await fetch(assumableRolesEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -736,7 +737,8 @@ export const openModalWithSsoDetails = async (groupId, groupName) => {
     };
 
     try {
-        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/get-sso-group-members', {
+        const ssoMembersEndpoint = window.API?.GET_SSO_GROUP_MEMBERS || '/api/get-sso-group-members';
+        const response = await fetch(ssoMembersEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -1283,7 +1285,8 @@ const analyzeCustomPolicy = async (policyName) => {
     };
 
     try {
-        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/analyze-custom-policy', {
+        const analyzeCustomPolicyEndpoint = window.API?.ANALYZE_CUSTOM_POLICY || '/api/analyze-custom-policy';
+        const response = await fetch(analyzeCustomPolicyEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

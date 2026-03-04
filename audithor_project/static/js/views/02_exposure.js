@@ -910,7 +910,8 @@ window.runS3BucketSecurityCheck = async (bucketName) => {
             bucket_name: bucketName
         };
 
-        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-s3-security-check', {
+        const s3SecurityCheckEndpoint = window.API?.RUN_S3_SECURITY_CHECK || '/api/run-s3-security-check';
+        const response = await fetch(s3SecurityCheckEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

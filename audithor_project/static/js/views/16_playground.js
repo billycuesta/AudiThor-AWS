@@ -279,7 +279,8 @@ const runPlaygroundAnalysis = async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-playground-audit', {
+        const playgroundEndpoint = window.API?.RUN_PLAYGROUND || '/api/run-playground-audit';
+        const response = await fetch(playgroundEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -412,7 +413,8 @@ const runSslScan = async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
 
-        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-sslscan', {
+        const sslscanEndpoint = window.API?.RUN_SSLSCAN || '/api/run-sslscan';
+        const response = await fetch(sslscanEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ target: target }),
@@ -497,7 +499,8 @@ const runSimulation = async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
-        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-simulate-policy', {
+        const simulatePolicyEndpoint = window.API?.RUN_SIMULATE_POLICY || '/api/run-simulate-policy';
+        const response = await fetch(simulatePolicyEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -632,7 +635,8 @@ const runLambdaSimulation = async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
-        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-simulate-lambda-policy', {
+        const simulateLambdaEndpoint = window.API?.RUN_SIMULATE_LAMBDA || '/api/run-simulate-lambda-policy';
+        const response = await fetch(simulateLambdaEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),

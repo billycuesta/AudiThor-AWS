@@ -647,7 +647,8 @@ const runCloudtrailLookupAnalysis = async () => {
     };
 
     try {
-        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-cloudtrail-lookup', {
+        const cloudtrailLookupEndpoint = window.API?.RUN_CLOUDTRAIL_LOOKUP || '/api/run-cloudtrail-lookup';
+        const response = await fetch(cloudtrailLookupEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
