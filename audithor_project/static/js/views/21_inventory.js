@@ -38,6 +38,7 @@ const renderInventoryTable = (results) => {
         'vpcs': "VPCs",
         'dynamodb_tables': "DynamoDB Tables",
         'route53_hosted_zones': "Route 53 Hosted Zones",
+        'route53_subdomains': "Route 53 Subdomains",
         'ecs_clusters': "ECS Clusters",
         'eks_clusters': "EKS Clusters",
         'cloudfront_distributions': "CloudFront Distributions",

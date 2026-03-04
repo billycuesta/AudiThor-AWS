@@ -97,6 +97,7 @@ def collect_inventory_summary(session):
         'vpcs': {'total': 0, 'by_region': {}},
         'dynamodb_tables': {'total': 0, 'by_region': {}},
         'route53_hosted_zones': {'total': 0, 'by_region': {}}, # Es global
+        'route53_subdomains': {'total': 0, 'by_region': {}}, # Es global
     }
 
     # Recursos Globales (IAM y S3)
@@ -122,10 +123,34 @@ def collect_inventory_summary(session):
         route53 = session.client('route53')
         paginator_r53 = route53.get_paginator('list_hosted_zones')
         r53_count = 0
+        r53_subdomains_count = 0
         for page in paginator_r53.paginate():
-            r53_count += len(page.get('HostedZones', []))
+            hosted_zones = page.get('HostedZones', [])
+            r53_count += len(hosted_zones)
+
+            for hosted_zone in hosted_zones:
+                zone_id = hosted_zone.get('Id', '').split('/')[-1]
+                zone_name = hosted_zone.get('Name', '').rstrip('.')
+                if not zone_id or not zone_name:
+                    continue
+
+                paginator_records = route53.get_paginator('list_resource_record_sets')
+                for records_page in paginator_records.paginate(HostedZoneId=zone_id):
+                    for record in records_page.get('ResourceRecordSets', []):
+                        record_name = record.get('Name', '').rstrip('.')
+                        record_type = record.get('Type', '')
+
+                        is_apex = record_name == zone_name
+                        is_dns_meta = record_type in {'NS', 'SOA'}
+                        is_subdomain = record_name.endswith(f'.{zone_name}') and not is_apex
+
+                        if record_name and is_subdomain and not is_dns_meta:
+                            r53_subdomains_count += 1
+
         summary['route53_hosted_zones']['total'] = r53_count
         summary['route53_hosted_zones']['by_region']['Global'] = r53_count
+        summary['route53_subdomains']['total'] = r53_subdomains_count
+        summary['route53_subdomains']['by_region']['Global'] = r53_subdomains_count
 
         cloudfront = session.client('cloudfront')
         paginator_cf = cloudfront.get_paginator('list_distributions')

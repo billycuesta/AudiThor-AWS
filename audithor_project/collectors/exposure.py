@@ -12,10 +12,11 @@ EXPOSURE_SERVICES = {
     "ALB/NLB Public": "elbv2",
     "Lambda URLs": "lambda",
     "API Gateway Public": "apigateway",
+    "Route53 Subdomains": "route53",
     "Assumable Roles": "iam",
 }
 
-EXPOSURE_GLOBAL_SERVICES = {"S3 Public Buckets", "Assumable Roles"}
+EXPOSURE_GLOBAL_SERVICES = {"S3 Public Buckets", "Route53 Subdomains", "Assumable Roles"}
 
 
 def is_bucket_public(s3, bucket):
@@ -411,6 +412,38 @@ def collect_exposure_data(session):
                 for role in client.list_roles()["Roles"]:
                     if role_is_assumable_by_anyone(role):
                         exposed.append(role["RoleName"])
+
+            elif service == "Route53 Subdomains":
+                client = current_session.client("route53", region_name="us-east-1")
+                hosted_zone_paginator = client.get_paginator("list_hosted_zones")
+                for hosted_zone_page in hosted_zone_paginator.paginate():
+                    for hosted_zone in hosted_zone_page.get("HostedZones", []):
+                        zone_id = hosted_zone.get("Id", "").split("/")[-1]
+                        zone_name = hosted_zone.get("Name", "").rstrip(".")
+
+                        if not zone_id or not zone_name:
+                            continue
+
+                        paginator = client.get_paginator("list_resource_record_sets")
+                        for page in paginator.paginate(HostedZoneId=zone_id):
+                            for record in page.get("ResourceRecordSets", []):
+                                record_name = record.get("Name", "").rstrip(".")
+                                record_type = record.get("Type", "")
+
+                                if not record_name:
+                                    continue
+
+                                is_apex = record_name == zone_name
+                                is_dns_meta = record_type in {"NS", "SOA"}
+                                is_subdomain = record_name.endswith(f".{zone_name}") and not is_apex
+
+                                if is_subdomain and not is_dns_meta:
+                                    exposed.append({
+                                        "HostedZone": zone_name,
+                                        "Name": record_name,
+                                        "Type": record_type,
+                                        "TTL": record.get("TTL", "Alias")
+                                    })
 
             with lock:
                 if exposed:

@@ -45,6 +45,12 @@ const exposureServiceDescriptions = {
         useCases: "Public REST APIs, mobile application backends, third-party integrations, webhooks, microservices exposure, serverless application endpoints.",
         auditConsiderations: "Review authentication and authorization mechanisms. Verify that API keys, IAM, or Cognito authorization is properly configured. Check throttling limits and usage plans to prevent abuse. Ensure proper input validation and error handling."
     },
+    "Route53 Subdomains": {
+        title: "Route 53 Subdomains",
+        description: "DNS records in Route 53 hosted zones that represent subdomains and can expand the internet-facing attack surface.",
+        useCases: "Application endpoints, service aliases, environment separation (dev/stage/prod), CDN origins, API hostnames.",
+        auditConsiderations: "Review unknown or legacy subdomains, validate ownership, and ensure records do not point to abandoned resources. Subdomain inventory is critical to prevent takeover and shadow IT exposure."
+    },
     "Publicly Exposed Network Ports": {
         title: "Publicly Exposed Network Ports",
         description: "Network Access Control Lists (NACLs) and Security Group rules that allow inbound traffic from 0.0.0.0/0 on specific ports, creating pathways for internet traffic to reach AWS resources.",
@@ -73,7 +79,7 @@ export const buildExposureView = () => {
 
     const allExposureServices = [
         "S3 Public Buckets", "EC2 Public Instances", "Security Groups Open", 
-        "ALB/NLB Public", "Lambda URLs", "API Gateway Public", "Lambda Credential Harvesting"
+        "ALB/NLB Public", "Lambda URLs", "API Gateway Public", "Route53 Subdomains", "Lambda Credential Harvesting"
     ];
 
     const details = window.exposureApiData.results.details;
@@ -689,6 +695,10 @@ const renderExposureDetails = (service, regions) => {
         return renderApiGatewayTable(regions);
     }
 
+    if (service === "Route53 Subdomains") {
+        return renderRoute53SubdomainsTable(regions);
+    }
+
     // Agregar soporte para S3 Public Buckets con tabla
     if (service === "S3 Public Buckets") {
         return renderPublicS3BucketsTable(regions);
@@ -825,6 +835,39 @@ const renderPublicS3BucketsTable = (bucketsByRegion) => {
     `;
     
     return tableHtml + infoNote;
+};
+
+const renderRoute53SubdomainsTable = (subdomainsByRegion) => {
+    const allSubdomains = Object.values(subdomainsByRegion || {}).flat();
+
+    if (allSubdomains.length === 0) {
+        return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No Route 53 subdomains were found.</p></div>';
+    }
+
+    allSubdomains.sort((a, b) => {
+        const zoneA = (a.HostedZone || '').localeCompare(b.HostedZone || '');
+        if (zoneA !== 0) return zoneA;
+        return (a.Name || '').localeCompare(b.Name || '');
+    });
+
+    let tableHtml = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
+                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hosted Zone</th>' +
+                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subdomain</th>' +
+                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Record Type</th>' +
+                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">TTL</th>' +
+                    '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+
+    allSubdomains.forEach((record) => {
+        tableHtml += `<tr class="hover:bg-gray-50">
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${record.HostedZone || '-'}</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800 font-mono">${record.Name || '-'}</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${record.Type || '-'}</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${record.TTL ?? '-'}</td>
+                      </tr>`;
+    });
+
+    tableHtml += '</tbody></table></div>';
+    return tableHtml;
 };
 
 // Función implementada para el Security Check REAL mejorada
