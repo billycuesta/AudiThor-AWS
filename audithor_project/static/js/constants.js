@@ -60,6 +60,7 @@ const API = {
   RUN_ECR:                 `${BASE}/api/run-ecr-audit`,
   RUN_DATABASES:           `${BASE}/api/run-databases-audit`,
   RUN_NETWORK_POLICIES:    `${BASE}/api/run-network-policies-audit`,
+  RUN_NETWORK_DETAIL:      `${BASE}/api/run-network-detail-audit`,
   RUN_FEDERATION:          `${BASE}/api/run-federation-audit`,
   RUN_CONFIG_SH_STATUS:    `${BASE}/api/run-config-sh-status-audit`,
   RUN_CONFIG_SH:           `${BASE}/api/run-config-sh-audit`,

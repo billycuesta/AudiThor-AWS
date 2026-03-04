@@ -625,7 +625,8 @@ const runNetworkDetailAnalysis = async () => {
     };
 
     try {
-        const response = await fetch('https://d38k4y82pqltc.cloudfront.net/api/run-network-detail-audit', {
+        const networkDetailEndpoint = window.API?.RUN_NETWORK_DETAIL || '/api/run-network-detail-audit';
+        const response = await fetch(networkDetailEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
