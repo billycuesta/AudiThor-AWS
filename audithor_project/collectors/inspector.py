@@ -7,7 +7,7 @@ from .utils import get_all_aws_regions # Importación relativa
 
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ConnectTimeoutError, EndpointConnectionError
 from collections import defaultdict
 from .utils import get_all_aws_regions  # Relative import
 
@@ -56,7 +56,7 @@ def collect_inspector_status(session):
                     "ScanLambda": resource_state.get('lambda', {}).get('status', 'NOT_AVAILABLE')
                 }
                 result_scan_status.append(status)
-        except ClientError:
+        except (ClientError, ConnectTimeoutError, EndpointConnectionError):
             continue
     return {"scan_status": result_scan_status}
 
@@ -101,7 +101,7 @@ def collect_inspector_findings(session):
                 for finding in page.get('findings', []):
                     finding['Region'] = region
                     result_findings.append(finding)
-        except ClientError:
+        except (ClientError, ConnectTimeoutError, EndpointConnectionError):
             continue
 
     # Group EC2 instance IDs by region for efficient querying
@@ -129,7 +129,7 @@ def collect_inspector_findings(session):
                         name_tag = next((tag['Value'] for tag in instance.get('Tags', []) if tag['Key'] == 'Name'), None)
                         if name_tag:
                             instance_name_map[instance['InstanceId']] = name_tag
-        except ClientError:
+        except (ClientError, ConnectTimeoutError, EndpointConnectionError):
             continue
 
     # Add the resolved name back to the finding object

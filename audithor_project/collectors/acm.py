@@ -1,7 +1,7 @@
 # collectors/acm.py
 import json
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ConnectTimeoutError, EndpointConnectionError
 from .utils import get_all_aws_regions # Importación relativa
 
 
@@ -56,15 +56,13 @@ def collect_acm_data_web(session: boto3.Session):
                         
                         result_certificates.append(cert_details)
 
-                    except ClientError as e:
-                        # Skip certificates if an error occurs (e.g., in an opt-in region).
+                    except (ClientError, ConnectTimeoutError, EndpointConnectionError) as e:
                         if "OptInRequired" in str(e) or "endpoint" in str(e):
                             continue
-        
-        except ClientError as e:
-            # Skip regions that are not enabled or have connection issues.
-            if "OptInRequired" in str(e) or "endpoint" in str(e) or "SignatureDoesNotMatch" in str(e): 
-                continue
+
+        except (ClientError, ConnectTimeoutError, EndpointConnectionError) as e:
+            # Skip regions not enabled, opt-in, or unreachable (e.g. me-south-1)
+            continue
 
     # Sort the final list of certificates by Region, then by Domain Name.
     result_certificates.sort(key=lambda x: (x.get('Region', ''), x.get('DomainName', '')))

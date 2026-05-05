@@ -1,7 +1,7 @@
 # collectors/databases.py
 import json
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ConnectTimeoutError, EndpointConnectionError
 from .utils import get_all_aws_regions  # Importación relativa
 
 
@@ -179,6 +179,8 @@ def collect_database_data(session):
                         }
                     )
 
+        except (ConnectTimeoutError, EndpointConnectionError):
+            continue  # region unreachable (e.g. opt-in not activated)
         except ClientError as e:
             common = {
                 "InvalidClientTokenId",
